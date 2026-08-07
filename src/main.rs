@@ -1,3 +1,4 @@
+mod caster;
 mod framebuffer;
 mod input;
 mod line;
@@ -5,6 +6,7 @@ mod maze;
 mod player;
 mod render;
 
+use caster::cast_ray;
 use framebuffer::Framebuffer;
 use input::process_input;
 use maze::{find_char, load_maze, validate_maze};
@@ -63,6 +65,17 @@ fn main() -> Result<(), minifb::Error> {
 
         framebuffer.clear();
         render_maze(&mut framebuffer, &maze, BLOCK_SIZE);
+        let ray = cast_ray(
+            &mut framebuffer,
+            &maze,
+            &player,
+            player.a,
+            BLOCK_SIZE,
+            maze_offset_x,
+            maze_offset_y,
+            true,
+        );
+        let _ = (ray.distance, ray.impact);
         render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
 
         window.update_with_buffer(&framebuffer.buffer, WIDTH, HEIGHT)?;
