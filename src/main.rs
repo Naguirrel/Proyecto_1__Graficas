@@ -1,14 +1,17 @@
 mod framebuffer;
+mod input;
 mod line;
 mod maze;
 mod player;
 mod render;
 
 use framebuffer::Framebuffer;
+use input::process_input;
 use maze::{find_char, load_maze, validate_maze};
 use minifb::{Key, Window, WindowOptions};
 use player::Player;
 use render::{maze_offset, render_maze, render_player};
+use std::time::Instant;
 
 const WIDTH: usize = 800;
 const HEIGHT: usize = 600;
@@ -25,7 +28,7 @@ fn main() -> Result<(), minifb::Error> {
     let maze_height = maze.len();
     let player_start = find_char(&maze, 'p').expect("Maze does not contain player start");
     let goal = find_char(&maze, 'g').expect("Maze does not contain goal");
-    let player = Player::new(player_start.0, player_start.1, BLOCK_SIZE);
+    let mut player = Player::new(player_start.0, player_start.1, BLOCK_SIZE);
 
     println!("Maze loaded: {}x{}", maze_width, maze_height);
     println!("Player start: ({}, {})", player_start.0, player_start.1);
@@ -46,8 +49,18 @@ fn main() -> Result<(), minifb::Error> {
 
     let mut framebuffer = Framebuffer::new(WIDTH, HEIGHT);
     let (maze_offset_x, maze_offset_y) = maze_offset(&framebuffer, &maze, BLOCK_SIZE);
+    let mut last_time = Instant::now();
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
+        let current_time = Instant::now();
+        let delta_time = current_time
+            .duration_since(last_time)
+            .as_secs_f32()
+            .min(0.1);
+        last_time = current_time;
+
+        process_input(&window, &mut player, delta_time);
+
         framebuffer.clear();
         render_maze(&mut framebuffer, &maze, BLOCK_SIZE);
         render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
