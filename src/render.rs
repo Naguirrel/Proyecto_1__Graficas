@@ -4,15 +4,20 @@ use crate::line::line;
 use crate::maze::Maze;
 use crate::player::Player;
 
-const WALL_COLOR: u32 = 0x1f2937;
+const WALL_COLOR: u32 = 0x3b82f6;
+const WALL_PLUS_COLOR: u32 = 0xef4444;
+const WALL_PERCENT_COLOR: u32 = 0x22c55e;
+const WALL_AT_COLOR: u32 = 0xa855f7;
 const PATH_COLOR: u32 = 0xd1d5db;
 const GOAL_COLOR: u32 = 0xfacc15;
 const PLAYER_COLOR: u32 = 0x00e5ff;
 const PLAYER_DIRECTION_COLOR: u32 = 0xfff7ed;
-const WALL_3D_COLOR: u32 = 0xe5e7eb;
+const CEILING_COLOR: u32 = 0x111827;
+const FLOOR_COLOR: u32 = 0x374151;
 const UNKNOWN_COLOR: u32 = 0xff00ff;
 const PLAYER_SIZE: isize = 4;
 const DIRECTION_LENGTH: f32 = 30.0;
+const JUMP_VISUAL_SCALE: f32 = 1.0;
 
 pub fn render_maze(framebuffer: &mut Framebuffer, maze: &Maze, block_size: usize) {
     if maze.is_empty() || block_size == 0 {
@@ -73,10 +78,10 @@ pub fn render_3d(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, bl
     }
 
     let projection_plane = distance_to_projection_plane(framebuffer.width, player.fov);
-    let half_height = framebuffer.height as f32 / 2.0;
+    let screen_center = framebuffer.height as f32 / 2.0 + player.height * JUMP_VISUAL_SCALE;
     let last_column = framebuffer.width.saturating_sub(1);
 
-    framebuffer.set_current_color(WALL_3D_COLOR);
+    render_3d_background(framebuffer);
 
     for x in 0..framebuffer.width {
         let fraction = if framebuffer.width == 1 {
@@ -96,13 +101,15 @@ pub fn render_3d(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, bl
             0,
             false,
         );
+        let corrected_distance = correct_fish_eye(intersection.distance, ray_angle, player.a);
         let stake_height =
-            projected_stake_height(block_size as f32, intersection.distance, projection_plane);
-        let stake_top = (half_height - stake_height / 2.0).max(0.0).round() as isize;
-        let stake_bottom = (half_height + stake_height / 2.0)
+            projected_stake_height(block_size as f32, corrected_distance, projection_plane);
+        let stake_top = (screen_center - stake_height / 2.0).max(0.0).round() as isize;
+        let stake_bottom = (screen_center + stake_height / 2.0)
             .min((framebuffer.height - 1) as f32)
             .round() as isize;
 
+        framebuffer.set_current_color(wall_color(intersection.impact));
         line(framebuffer, x as isize, stake_top, x as isize, stake_bottom);
     }
 }
@@ -110,6 +117,9 @@ pub fn render_3d(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, bl
 fn draw_cell(framebuffer: &mut Framebuffer, x0: usize, y0: usize, block_size: usize, cell: char) {
     let color = match cell {
         '#' => WALL_COLOR,
+        '+' => WALL_PLUS_COLOR,
+        '%' => WALL_PERCENT_COLOR,
+        '@' => WALL_AT_COLOR,
         ' ' | 'p' => PATH_COLOR,
         'g' => GOAL_COLOR,
         _ => UNKNOWN_COLOR,
@@ -127,16 +137,48 @@ fn draw_cell(framebuffer: &mut Framebuffer, x0: usize, y0: usize, block_size: us
     }
 }
 
+fn render_3d_background(framebuffer: &mut Framebuffer) {
+    let half_height = framebuffer.height / 2;
+
+    framebuffer.set_current_color(CEILING_COLOR);
+    for y in 0..half_height {
+        for x in 0..framebuffer.width {
+            framebuffer.point(x as isize, y as isize);
+        }
+    }
+
+    framebuffer.set_current_color(FLOOR_COLOR);
+    for y in half_height..framebuffer.height {
+        for x in 0..framebuffer.width {
+            framebuffer.point(x as isize, y as isize);
+        }
+    }
+}
+
 fn distance_to_projection_plane(screen_width: usize, fov: f32) -> f32 {
     let half_fov_tan = (fov / 2.0).tan().max(0.0001);
 
     (screen_width as f32 / 2.0) / half_fov_tan
 }
 
+fn correct_fish_eye(distance: f32, ray_angle: f32, player_angle: f32) -> f32 {
+    distance * (ray_angle - player_angle).cos()
+}
+
 fn projected_stake_height(wall_height: f32, distance_to_wall: f32, projection_plane: f32) -> f32 {
     let distance_to_wall = distance_to_wall.max(0.0001);
 
     (wall_height / distance_to_wall) * projection_plane
+}
+
+fn wall_color(impact: char) -> u32 {
+    match impact {
+        '#' => WALL_COLOR,
+        '+' => WALL_PLUS_COLOR,
+        '%' => WALL_PERCENT_COLOR,
+        '@' => WALL_AT_COLOR,
+        _ => UNKNOWN_COLOR,
+    }
 }
 
 #[cfg(test)]
@@ -157,5 +199,25 @@ mod tests {
         let far_stake = projected_stake_height(40.0, 160.0, projection_plane);
 
         assert!(near_stake > far_stake);
+    }
+
+    #[test]
+    fn fish_eye_correction_preserves_center_distance_and_reduces_side_distance() {
+        let center = correct_fish_eye(100.0, 1.0, 1.0);
+        let side = correct_fish_eye(100.0, 1.4, 1.0);
+
+        assert_eq!(center, 100.0);
+        assert!(side < 100.0);
+    }
+
+    #[test]
+    fn wall_characters_have_distinct_colors() {
+        assert_eq!(wall_color('#'), WALL_COLOR);
+        assert_eq!(wall_color('+'), WALL_PLUS_COLOR);
+        assert_eq!(wall_color('%'), WALL_PERCENT_COLOR);
+        assert_eq!(wall_color('@'), WALL_AT_COLOR);
+        assert_ne!(wall_color('#'), wall_color('+'));
+        assert_ne!(wall_color('+'), wall_color('%'));
+        assert_ne!(wall_color('%'), wall_color('@'));
     }
 }

@@ -1,12 +1,14 @@
 use std::f32::consts::PI;
 
-use minifb::{Key, Window};
+use minifb::{Key, KeyRepeat, Window};
 
 use crate::maze::{Maze, is_walkable};
 use crate::player::Player;
 
 const MOVEMENT_SPEED: f32 = 100.0;
 const ROTATION_SPEED: f32 = 2.0;
+const JUMP_SPEED: f32 = 220.0;
+const GRAVITY: f32 = 600.0;
 
 pub fn process_input(
     window: &Window,
@@ -52,4 +54,10 @@ pub fn process_input(
     }
 
     player.a = player.a.rem_euclid(2.0 * PI);
+
+    if window.is_key_pressed(Key::Space, KeyRepeat::No) {
+        player.start_jump(JUMP_SPEED);
+    }
+
+    player.update_vertical_motion(delta_time, GRAVITY);
 }
