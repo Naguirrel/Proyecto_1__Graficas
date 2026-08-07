@@ -7,6 +7,7 @@ name = "Proyecto_1_Raycasting"
 version = "0.1.0"
 dependencies = [
  "minifb",
+ "winapi",
 ]
 
 [[package]]
