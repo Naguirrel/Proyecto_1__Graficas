@@ -1,0 +1,16 @@
+[package]
+name = "Proyecto_1_Raycasting"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+minifb = "0.28"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser"] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
