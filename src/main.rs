@@ -1,12 +1,14 @@
 mod framebuffer;
 mod line;
 mod maze;
+mod player;
 mod render;
 
 use framebuffer::Framebuffer;
 use maze::{find_char, load_maze, validate_maze};
 use minifb::{Key, Window, WindowOptions};
-use render::render_maze;
+use player::Player;
+use render::{maze_offset, render_maze, render_player};
 
 const WIDTH: usize = 800;
 const HEIGHT: usize = 600;
@@ -23,10 +25,17 @@ fn main() -> Result<(), minifb::Error> {
     let maze_height = maze.len();
     let player_start = find_char(&maze, 'p').expect("Maze does not contain player start");
     let goal = find_char(&maze, 'g').expect("Maze does not contain goal");
+    let player = Player::new(player_start.0, player_start.1, BLOCK_SIZE);
 
     println!("Maze loaded: {}x{}", maze_width, maze_height);
     println!("Player start: ({}, {})", player_start.0, player_start.1);
     println!("Goal: ({}, {})", goal.0, goal.1);
+    println!(
+        "Player world position: ({:.1}, {:.1})",
+        player.pos.x, player.pos.y
+    );
+    println!("Player angle: {:.4} rad", player.a);
+    println!("Player FOV: {:.4} rad", player.fov);
 
     let mut window = Window::new(
         "Proyecto 1 - Raycasting",
@@ -36,10 +45,12 @@ fn main() -> Result<(), minifb::Error> {
     )?;
 
     let mut framebuffer = Framebuffer::new(WIDTH, HEIGHT);
+    let (maze_offset_x, maze_offset_y) = maze_offset(&framebuffer, &maze, BLOCK_SIZE);
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         framebuffer.clear();
         render_maze(&mut framebuffer, &maze, BLOCK_SIZE);
+        render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
 
         window.update_with_buffer(&framebuffer.buffer, WIDTH, HEIGHT)?;
     }
