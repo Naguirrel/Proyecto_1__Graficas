@@ -5,6 +5,7 @@ use crate::player::Player;
 
 const RAY_COLOR: u32 = 0xff0000;
 const STEP_SIZE: f32 = 1.0;
+pub const NUM_RAYS_2D: usize = 60;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Intersect {
@@ -83,6 +84,45 @@ pub fn cast_ray(
         distance,
         impact: '#',
     }
+}
+
+pub fn cast_fov_2d(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    player: &Player,
+    block_size: usize,
+    offset_x: usize,
+    offset_y: usize,
+) -> Vec<Intersect> {
+    let mut intersects = Vec::with_capacity(NUM_RAYS_2D);
+
+    if NUM_RAYS_2D == 0 {
+        return intersects;
+    }
+
+    for ray_index in 0..NUM_RAYS_2D {
+        let fraction = if NUM_RAYS_2D == 1 {
+            0.5
+        } else {
+            ray_index as f32 / (NUM_RAYS_2D - 1) as f32
+        };
+
+        let ray_angle = player.a - player.fov / 2.0 + fraction * player.fov;
+        let intersect = cast_ray(
+            framebuffer,
+            maze,
+            player,
+            ray_angle,
+            block_size,
+            offset_x,
+            offset_y,
+            true,
+        );
+
+        intersects.push(intersect);
+    }
+
+    intersects
 }
 
 fn max_ray_distance(maze: &Maze, block_size: usize) -> f32 {
