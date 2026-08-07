@@ -10,14 +10,29 @@ use caster::cast_fov_2d;
 use framebuffer::Framebuffer;
 use input::process_input;
 use maze::{find_char, load_maze, validate_maze};
-use minifb::{Key, Window, WindowOptions};
+use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
-use render::{maze_offset, render_maze, render_player};
+use render::{maze_offset, render_3d, render_maze, render_player};
 use std::time::Instant;
 
 const WIDTH: usize = 800;
 const HEIGHT: usize = 600;
 const BLOCK_SIZE: usize = 40;
+
+#[derive(Clone, Copy)]
+enum RenderMode {
+    Mode2D,
+    Mode3D,
+}
+
+impl RenderMode {
+    fn toggle(self) -> Self {
+        match self {
+            Self::Mode2D => Self::Mode3D,
+            Self::Mode3D => Self::Mode2D,
+        }
+    }
+}
 
 fn main() -> Result<(), minifb::Error> {
     let maze = load_maze("maze.txt");
@@ -52,6 +67,7 @@ fn main() -> Result<(), minifb::Error> {
     let mut framebuffer = Framebuffer::new(WIDTH, HEIGHT);
     let (maze_offset_x, maze_offset_y) = maze_offset(&framebuffer, &maze, BLOCK_SIZE);
     let mut last_time = Instant::now();
+    let mut render_mode = RenderMode::Mode2D;
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let current_time = Instant::now();
@@ -63,18 +79,30 @@ fn main() -> Result<(), minifb::Error> {
 
         process_input(&window, &mut player, &maze, BLOCK_SIZE, delta_time);
 
+        if window.is_key_pressed(Key::Tab, KeyRepeat::No) {
+            render_mode = render_mode.toggle();
+        }
+
         framebuffer.clear();
-        render_maze(&mut framebuffer, &maze, BLOCK_SIZE);
-        let rays = cast_fov_2d(
-            &mut framebuffer,
-            &maze,
-            &player,
-            BLOCK_SIZE,
-            maze_offset_x,
-            maze_offset_y,
-        );
-        let _ = rays.first().map(|ray| (ray.distance, ray.impact));
-        render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
+
+        match render_mode {
+            RenderMode::Mode2D => {
+                render_maze(&mut framebuffer, &maze, BLOCK_SIZE);
+                let rays = cast_fov_2d(
+                    &mut framebuffer,
+                    &maze,
+                    &player,
+                    BLOCK_SIZE,
+                    maze_offset_x,
+                    maze_offset_y,
+                );
+                let _ = rays.first().map(|ray| (ray.distance, ray.impact));
+                render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
+            }
+            RenderMode::Mode3D => {
+                render_3d(&mut framebuffer, &maze, &player, BLOCK_SIZE);
+            }
+        }
 
         window.update_with_buffer(&framebuffer.buffer, WIDTH, HEIGHT)?;
     }
