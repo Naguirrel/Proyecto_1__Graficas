@@ -2,25 +2,45 @@ use std::f32::consts::PI;
 
 use minifb::{Key, Window};
 
+use crate::maze::{Maze, is_walkable};
 use crate::player::Player;
 
 const MOVEMENT_SPEED: f32 = 100.0;
 const ROTATION_SPEED: f32 = 2.0;
 
-pub fn process_input(window: &Window, player: &mut Player, delta_time: f32) {
+pub fn process_input(
+    window: &Window,
+    player: &mut Player,
+    maze: &Maze,
+    block_size: usize,
+    delta_time: f32,
+) {
     let dir_x = player.a.cos();
     let dir_y = player.a.sin();
     let movement = MOVEMENT_SPEED * delta_time;
     let rotation = ROTATION_SPEED * delta_time;
 
+    let mut move_direction = 0.0;
+
     if window.is_key_down(Key::W) {
-        player.pos.x += dir_x * movement;
-        player.pos.y += dir_y * movement;
+        move_direction += 1.0;
     }
 
     if window.is_key_down(Key::S) {
-        player.pos.x -= dir_x * movement;
-        player.pos.y -= dir_y * movement;
+        move_direction -= 1.0;
+    }
+
+    if move_direction != 0.0 {
+        let candidate_x = player.pos.x + dir_x * movement * move_direction;
+        let candidate_y = player.pos.y + dir_y * movement * move_direction;
+
+        if is_walkable(maze, candidate_x, player.pos.y, block_size) {
+            player.pos.x = candidate_x;
+        }
+
+        if is_walkable(maze, player.pos.x, candidate_y, block_size) {
+            player.pos.y = candidate_y;
+        }
     }
 
     if window.is_key_down(Key::A) {

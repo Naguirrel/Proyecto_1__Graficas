@@ -59,7 +59,7 @@ fn main() -> Result<(), minifb::Error> {
             .min(0.1);
         last_time = current_time;
 
-        process_input(&window, &mut player, delta_time);
+        process_input(&window, &mut player, &maze, BLOCK_SIZE, delta_time);
 
         framebuffer.clear();
         render_maze(&mut framebuffer, &maze, BLOCK_SIZE);

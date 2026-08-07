@@ -46,6 +46,20 @@ pub fn find_char(maze: &Maze, target: char) -> Option<(usize, usize)> {
     None
 }
 
+pub fn is_walkable(maze: &Maze, x: f32, y: f32, block_size: usize) -> bool {
+    if block_size == 0 || !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 {
+        return false;
+    }
+
+    let column = (x / block_size as f32).floor() as usize;
+    let row = (y / block_size as f32).floor() as usize;
+
+    match maze.get(row).and_then(|maze_row| maze_row.get(column)) {
+        Some(' ' | 'p' | 'g') => true,
+        _ => false,
+    }
+}
+
 fn count_char(maze: &Maze, target: char) -> usize {
     maze.iter()
         .flatten()
