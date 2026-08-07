@@ -13,6 +13,7 @@ pub struct Intersect {
     pub impact: char,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn cast_ray(
     framebuffer: &mut Framebuffer,
     maze: &Maze,
@@ -152,4 +153,87 @@ fn draw_ray_line(
 
     framebuffer.set_current_color(RAY_COLOR);
     line(framebuffer, start_x, start_y, end_x, end_y);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::f32::consts::PI;
+
+    use super::*;
+
+    fn test_maze() -> Maze {
+        vec![
+            "#####".chars().collect(),
+            "#   #".chars().collect(),
+            "# p #".chars().collect(),
+            "#   #".chars().collect(),
+            "#####".chars().collect(),
+        ]
+    }
+
+    fn test_player() -> Player {
+        Player::new(2, 2, 10)
+    }
+
+    fn assert_distance_close(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() <= STEP_SIZE,
+            "expected distance near {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn cast_ray_hits_first_wall_in_cardinal_directions() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let right = cast_ray(&mut framebuffer, &maze, &player, 0.0, 10, 0, 0, false);
+        assert_eq!(right.impact, '#');
+        assert_distance_close(right.distance, 15.0);
+
+        let down = cast_ray(&mut framebuffer, &maze, &player, PI / 2.0, 10, 0, 0, false);
+        assert_eq!(down.impact, '#');
+        assert_distance_close(down.distance, 15.0);
+
+        let left = cast_ray(&mut framebuffer, &maze, &player, PI, 10, 0, 0, false);
+        assert_eq!(left.impact, '#');
+        assert_distance_close(left.distance, 16.0);
+
+        let up = cast_ray(
+            &mut framebuffer,
+            &maze,
+            &player,
+            3.0 * PI / 2.0,
+            10,
+            0,
+            0,
+            false,
+        );
+        assert_eq!(up.impact, '#');
+        assert_distance_close(up.distance, 16.0);
+    }
+
+    #[test]
+    fn cast_ray_with_draw_line_false_does_not_modify_framebuffer() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        cast_ray(&mut framebuffer, &maze, &player, 0.0, 10, 0, 0, false);
+
+        assert!(framebuffer.buffer.iter().all(|pixel| *pixel == 0));
+    }
+
+    #[test]
+    fn cast_fov_uses_expected_number_of_rays() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let rays = cast_fov_2d(&mut framebuffer, &maze, &player, 10, 0, 0);
+
+        assert_eq!(rays.len(), NUM_RAYS_2D);
+        assert!(rays.iter().all(|ray| ray.impact == '#'));
+    }
 }
