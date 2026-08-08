@@ -5,7 +5,6 @@ use crate::player::Player;
 
 const RAY_COLOR: u32 = 0xff0000;
 const STEP_SIZE: f32 = 1.0;
-pub const NUM_RAYS_2D: usize = 60;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Intersect {
@@ -95,17 +94,18 @@ pub fn cast_fov_2d(
     offset_x: usize,
     offset_y: usize,
 ) -> Vec<Intersect> {
-    let mut intersects = Vec::with_capacity(NUM_RAYS_2D);
+    let ray_count = framebuffer.width;
+    let mut intersects = Vec::with_capacity(ray_count);
 
-    if NUM_RAYS_2D == 0 {
+    if ray_count == 0 {
         return intersects;
     }
 
-    for ray_index in 0..NUM_RAYS_2D {
-        let fraction = if NUM_RAYS_2D == 1 {
+    for ray_index in 0..ray_count {
+        let fraction = if ray_count == 1 {
             0.5
         } else {
-            ray_index as f32 / (NUM_RAYS_2D - 1) as f32
+            ray_index as f32 / (ray_count - 1) as f32
         };
 
         let ray_angle = player.a - player.fov / 2.0 + fraction * player.fov;
@@ -233,7 +233,7 @@ mod tests {
 
         let rays = cast_fov_2d(&mut framebuffer, &maze, &player, 10, 0, 0);
 
-        assert_eq!(rays.len(), NUM_RAYS_2D);
+        assert_eq!(rays.len(), framebuffer.width);
         assert!(rays.iter().all(|ray| ray.impact == '#'));
     }
 }
