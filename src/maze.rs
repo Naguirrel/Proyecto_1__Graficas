@@ -53,6 +53,10 @@ pub fn is_walkable(maze: &Maze, x: f32, y: f32, block_size: usize) -> bool {
     )
 }
 
+fn is_wall(cell: char) -> bool {
+    matches!(cell, '#' | '+' | '%' | '@')
+}
+
 pub fn cell_at_world_position(maze: &Maze, x: f32, y: f32, block_size: usize) -> Option<char> {
     if block_size == 0 || !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 {
         return None;
@@ -83,13 +87,13 @@ fn has_wall_borders(maze: &Maze) -> bool {
     if top
         .iter()
         .zip(bottom.iter())
-        .any(|(top, bottom)| *top != '#' || *bottom != '#')
+        .any(|(top, bottom)| !is_wall(*top) || !is_wall(*bottom))
     {
         return false;
     }
 
     for row in maze {
-        if row[0] != '#' || row[width - 1] != '#' {
+        if !is_wall(row[0]) || !is_wall(row[width - 1]) {
             return false;
         }
     }
@@ -142,6 +146,26 @@ mod tests {
         false
     }
 
+    fn has_repeated_adjacent_wall_color(maze: &Maze) -> bool {
+        for (y, row) in maze.iter().enumerate() {
+            for (x, cell) in row.iter().enumerate() {
+                if !is_wall(*cell) {
+                    continue;
+                }
+
+                if x + 1 < row.len() && row[x + 1] == *cell {
+                    return true;
+                }
+
+                if y + 1 < maze.len() && maze[y + 1][x] == *cell {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
     #[test]
     fn project_maze_is_valid_and_connects_player_to_goal() {
         let maze = maze_from_text(include_str!("../maze.txt"));
@@ -156,6 +180,13 @@ mod tests {
         assert_eq!(player, (1, 1));
         assert_eq!(goal, (13, 9));
         assert!(path_exists(&maze, player, goal));
+    }
+
+    #[test]
+    fn project_maze_has_no_adjacent_walls_with_same_color() {
+        let maze = maze_from_text(include_str!("../maze.txt"));
+
+        assert!(!has_repeated_adjacent_wall_color(&maze));
     }
 
     #[test]
