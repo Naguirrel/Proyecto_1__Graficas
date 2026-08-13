@@ -1,13 +1,27 @@
-# Proyecto #1 Graficas
+# Proyecto 1 - Raycasting
 
-Proyecto de raycasting escrito en Rust para el curso de Graficas por
-Computadora. El programa carga un laberinto desde `maze.txt`, renderiza un mapa
-2D con rayos y permite cambiar a una proyeccion 3D simple en primera persona.
+Proyecto universitario de Graficas por Computadora. El juego carga un laberinto
+desde `maze.txt`, permite recorrerlo en vista 2D o 3D, y termina cuando el
+jugador llega a la meta `g`.
 
-## Requisitos
+## Tecnologia
 
-- Toolchain de Rust con Cargo
-- Un entorno de escritorio que pueda abrir una ventana de `minifb`
+- Rust
+- minifb
+
+## Funcionalidades
+
+- Maze cargado desde archivo.
+- Vista 2D de depuracion.
+- Vista 3D estilo raycaster.
+- Raycasting con FOV.
+- Movimiento con delta time.
+- Colisiones y wall sliding.
+- Fish-eye correction.
+- Salto.
+- Diferentes tipos y colores de pared.
+- Bresenham para rasterizacion de lineas, rayos y stakes.
+- Meta y condicion de victoria.
 
 ## Ejecutar
 
@@ -17,13 +31,24 @@ cargo run
 
 ## Controles
 
-- `W`: avanzar
-- `S`: retroceder
-- `A`: girar a la izquierda
-- `D`: girar a la derecha
-- `Space`: saltar
-- `Tab`: cambiar entre los modos de renderizado 2D y 3D
-- `Esc`: cerrar la ventana
+Durante el juego:
+
+```text
+W       Avanzar
+S       Retroceder
+A       Girar izquierda
+D       Girar derecha
+SPACE   Saltar
+TAB     Alternar 2D / 3D
+ESC     Salir
+```
+
+Despues de ganar:
+
+```text
+R       Reiniciar
+ESC     Salir
+```
 
 ## Pruebas
 

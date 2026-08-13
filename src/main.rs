@@ -1,5 +1,6 @@
 mod caster;
 mod framebuffer;
+mod game;
 mod input;
 mod line;
 mod maze;
@@ -8,11 +9,12 @@ mod render;
 
 use caster::cast_fov_2d;
 use framebuffer::Framebuffer;
+use game::{GameState, player_reached_goal, reset_player};
 use input::process_input;
 use maze::{find_char, load_maze, validate_maze};
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
-use render::{maze_offset, render_3d, render_maze, render_player};
+use render::{maze_offset, render_3d, render_maze, render_player, render_victory_screen};
 use std::time::Instant;
 
 const WIDTH: usize = 800;
@@ -68,6 +70,7 @@ fn main() -> Result<(), minifb::Error> {
     let (maze_offset_x, maze_offset_y) = maze_offset(&framebuffer, &maze, BLOCK_SIZE);
     let mut last_time = Instant::now();
     let mut render_mode = RenderMode::Mode2D;
+    let mut game_state = GameState::Playing;
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let current_time = Instant::now();
@@ -77,30 +80,46 @@ fn main() -> Result<(), minifb::Error> {
             .min(0.1);
         last_time = current_time;
 
-        process_input(&window, &mut player, &maze, BLOCK_SIZE, delta_time);
+        match game_state {
+            GameState::Playing => {
+                process_input(&window, &mut player, &maze, BLOCK_SIZE, delta_time);
 
-        if window.is_key_pressed(Key::Tab, KeyRepeat::No) {
-            render_mode = render_mode.toggle();
+                if player_reached_goal(&maze, &player, BLOCK_SIZE) {
+                    game_state = GameState::Won;
+                } else if window.is_key_pressed(Key::Tab, KeyRepeat::No) {
+                    render_mode = render_mode.toggle();
+                }
+            }
+            GameState::Won => {
+                if window.is_key_pressed(Key::R, KeyRepeat::No) {
+                    reset_player(&mut player, player_start, BLOCK_SIZE);
+                    game_state = GameState::Playing;
+                }
+            }
         }
 
         framebuffer.clear();
 
-        match render_mode {
-            RenderMode::Mode2D => {
-                render_maze(&mut framebuffer, &maze, BLOCK_SIZE);
-                let rays = cast_fov_2d(
-                    &mut framebuffer,
-                    &maze,
-                    &player,
-                    BLOCK_SIZE,
-                    maze_offset_x,
-                    maze_offset_y,
-                );
-                let _ = rays.first().map(|ray| (ray.distance, ray.impact));
-                render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
-            }
-            RenderMode::Mode3D => {
-                render_3d(&mut framebuffer, &maze, &player, BLOCK_SIZE);
+        match game_state {
+            GameState::Playing => match render_mode {
+                RenderMode::Mode2D => {
+                    render_maze(&mut framebuffer, &maze, BLOCK_SIZE);
+                    cast_fov_2d(
+                        &mut framebuffer,
+                        &maze,
+                        &player,
+                        BLOCK_SIZE,
+                        maze_offset_x,
+                        maze_offset_y,
+                    );
+                    render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
+                }
+                RenderMode::Mode3D => {
+                    render_3d(&mut framebuffer, &maze, &player, BLOCK_SIZE);
+                }
+            },
+            GameState::Won => {
+                render_victory_screen(&mut framebuffer);
             }
         }
 

@@ -15,9 +15,15 @@ const PLAYER_DIRECTION_COLOR: u32 = 0xfff7ed;
 const CEILING_COLOR: u32 = 0x111827;
 const FLOOR_COLOR: u32 = 0x374151;
 const UNKNOWN_COLOR: u32 = 0xff00ff;
+const VICTORY_BACKGROUND_COLOR: u32 = 0x052e2b;
+const VICTORY_ACCENT_COLOR: u32 = 0xfacc15;
+const VICTORY_TEXT_COLOR: u32 = 0xfff7ed;
+const VICTORY_SHADOW_COLOR: u32 = 0x0f172a;
 const PLAYER_SIZE: isize = 4;
 const DIRECTION_LENGTH: f32 = 30.0;
 const JUMP_VISUAL_SCALE: f32 = 1.0;
+const GLYPH_WIDTH: isize = 5;
+const GLYPH_HEIGHT: isize = 7;
 
 pub fn render_maze(framebuffer: &mut Framebuffer, maze: &Maze, block_size: usize) {
     if maze.is_empty() || block_size == 0 {
@@ -114,6 +120,45 @@ pub fn render_3d(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, bl
     }
 }
 
+pub fn render_victory_screen(framebuffer: &mut Framebuffer) {
+    fill_screen(framebuffer, VICTORY_BACKGROUND_COLOR);
+
+    let margin = 24;
+    framebuffer.set_current_color(VICTORY_ACCENT_COLOR);
+    line(
+        framebuffer,
+        margin,
+        margin,
+        framebuffer.width as isize - margin,
+        margin,
+    );
+    line(
+        framebuffer,
+        margin,
+        framebuffer.height as isize - margin,
+        framebuffer.width as isize - margin,
+        framebuffer.height as isize - margin,
+    );
+    line(
+        framebuffer,
+        margin,
+        margin,
+        margin,
+        framebuffer.height as isize - margin,
+    );
+    line(
+        framebuffer,
+        framebuffer.width as isize - margin,
+        margin,
+        framebuffer.width as isize - margin,
+        framebuffer.height as isize - margin,
+    );
+
+    draw_text_centered(framebuffer, "GANASTE", 150, 12, VICTORY_TEXT_COLOR);
+    draw_text_centered(framebuffer, "R REINICIAR", 330, 5, VICTORY_ACCENT_COLOR);
+    draw_text_centered(framebuffer, "ESC SALIR", 390, 5, VICTORY_TEXT_COLOR);
+}
+
 fn draw_cell(framebuffer: &mut Framebuffer, x0: usize, y0: usize, block_size: usize, cell: char) {
     let color = match cell {
         '#' => WALL_COLOR,
@@ -178,6 +223,139 @@ fn wall_color(impact: char) -> u32 {
         '%' => WALL_PERCENT_COLOR,
         '@' => WALL_AT_COLOR,
         _ => UNKNOWN_COLOR,
+    }
+}
+
+fn fill_screen(framebuffer: &mut Framebuffer, color: u32) {
+    framebuffer.set_current_color(color);
+
+    for y in 0..framebuffer.height {
+        for x in 0..framebuffer.width {
+            framebuffer.point(x as isize, y as isize);
+        }
+    }
+}
+
+fn draw_text_centered(
+    framebuffer: &mut Framebuffer,
+    text: &str,
+    y: isize,
+    scale: isize,
+    color: u32,
+) {
+    let x = (framebuffer.width as isize - text_width(text, scale)) / 2;
+
+    draw_text(
+        framebuffer,
+        text,
+        x + scale,
+        y + scale,
+        scale,
+        VICTORY_SHADOW_COLOR,
+    );
+    draw_text(framebuffer, text, x, y, scale, color);
+}
+
+fn text_width(text: &str, scale: isize) -> isize {
+    let spacing = scale;
+
+    text.chars()
+        .map(|character| {
+            if character == ' ' {
+                GLYPH_WIDTH / 2 * scale
+            } else {
+                GLYPH_WIDTH * scale
+            }
+        })
+        .sum::<isize>()
+        + text.chars().count().saturating_sub(1) as isize * spacing
+}
+
+fn draw_text(
+    framebuffer: &mut Framebuffer,
+    text: &str,
+    x: isize,
+    y: isize,
+    scale: isize,
+    color: u32,
+) {
+    let mut cursor_x = x;
+
+    framebuffer.set_current_color(color);
+
+    for character in text.chars() {
+        if character == ' ' {
+            cursor_x += GLYPH_WIDTH / 2 * scale + scale;
+            continue;
+        }
+
+        draw_char(framebuffer, character, cursor_x, y, scale);
+        cursor_x += GLYPH_WIDTH * scale + scale;
+    }
+}
+
+fn draw_char(framebuffer: &mut Framebuffer, character: char, x: isize, y: isize, scale: isize) {
+    let Some(glyph) = glyph(character) else {
+        return;
+    };
+
+    for (row, bits) in glyph.iter().enumerate() {
+        for column in 0..GLYPH_WIDTH {
+            if bits & (1 << (GLYPH_WIDTH - 1 - column)) == 0 {
+                continue;
+            }
+
+            draw_scaled_pixel(
+                framebuffer,
+                x + column * scale,
+                y + row as isize * scale,
+                scale,
+            );
+        }
+    }
+}
+
+fn draw_scaled_pixel(framebuffer: &mut Framebuffer, x: isize, y: isize, scale: isize) {
+    for dy in 0..scale {
+        for dx in 0..scale {
+            framebuffer.point(x + dx, y + dy);
+        }
+    }
+}
+
+fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
+    match character {
+        'A' => Some([
+            0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001,
+        ]),
+        'C' => Some([
+            0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111,
+        ]),
+        'E' => Some([
+            0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111,
+        ]),
+        'G' => Some([
+            0b01111, 0b10000, 0b10000, 0b10111, 0b10001, 0b10001, 0b01111,
+        ]),
+        'I' => Some([
+            0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b11111,
+        ]),
+        'L' => Some([
+            0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111,
+        ]),
+        'N' => Some([
+            0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001,
+        ]),
+        'R' => Some([
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001,
+        ]),
+        'S' => Some([
+            0b01111, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110,
+        ]),
+        'T' => Some([
+            0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+        ]),
+        _ => None,
     }
 }
 

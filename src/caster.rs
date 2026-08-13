@@ -5,6 +5,7 @@ use crate::player::Player;
 
 const RAY_COLOR: u32 = 0xff0000;
 const STEP_SIZE: f32 = 1.0;
+pub const NUM_RAYS_2D: usize = 60;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Intersect {
@@ -93,23 +94,11 @@ pub fn cast_fov_2d(
     block_size: usize,
     offset_x: usize,
     offset_y: usize,
-) -> Vec<Intersect> {
-    let ray_count = framebuffer.width;
-    let mut intersects = Vec::with_capacity(ray_count);
+) {
+    for ray_index in 0..NUM_RAYS_2D {
+        let ray_angle = fov_ray_angle(player.a, player.fov, ray_index, NUM_RAYS_2D);
 
-    if ray_count == 0 {
-        return intersects;
-    }
-
-    for ray_index in 0..ray_count {
-        let fraction = if ray_count == 1 {
-            0.5
-        } else {
-            ray_index as f32 / (ray_count - 1) as f32
-        };
-
-        let ray_angle = player.a - player.fov / 2.0 + fraction * player.fov;
-        let intersect = cast_ray(
+        cast_ray(
             framebuffer,
             maze,
             player,
@@ -119,11 +108,17 @@ pub fn cast_fov_2d(
             offset_y,
             true,
         );
-
-        intersects.push(intersect);
     }
+}
 
-    intersects
+fn fov_ray_angle(player_angle: f32, fov: f32, ray_index: usize, ray_count: usize) -> f32 {
+    let fraction = if ray_count == 1 {
+        0.5
+    } else {
+        ray_index as f32 / (ray_count - 1) as f32
+    };
+
+    player_angle - fov / 2.0 + fraction * fov
 }
 
 fn max_ray_distance(maze: &Maze, block_size: usize) -> f32 {
@@ -227,13 +222,16 @@ mod tests {
 
     #[test]
     fn cast_fov_uses_expected_number_of_rays() {
-        let maze = test_maze();
+        assert_eq!(NUM_RAYS_2D, 60);
+    }
+
+    #[test]
+    fn fov_2d_covers_full_fov() {
         let player = test_player();
-        let mut framebuffer = Framebuffer::new(80, 80);
+        let first_angle = fov_ray_angle(player.a, player.fov, 0, NUM_RAYS_2D);
+        let last_angle = fov_ray_angle(player.a, player.fov, NUM_RAYS_2D - 1, NUM_RAYS_2D);
 
-        let rays = cast_fov_2d(&mut framebuffer, &maze, &player, 10, 0, 0);
-
-        assert_eq!(rays.len(), framebuffer.width);
-        assert!(rays.iter().all(|ray| ray.impact == '#'));
+        assert_eq!(first_angle, player.a - player.fov / 2.0);
+        assert_eq!(last_angle, player.a + player.fov / 2.0);
     }
 }
