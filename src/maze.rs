@@ -54,7 +54,7 @@ pub fn is_walkable(maze: &Maze, x: f32, y: f32, block_size: usize) -> bool {
 }
 
 fn is_wall(cell: char) -> bool {
-    matches!(cell, '#' | '+' | '%' | '@')
+    matches!(cell, '#' | '+' | '%' | '@' | '&' | '!')
 }
 
 pub fn cell_at_world_position(maze: &Maze, x: f32, y: f32, block_size: usize) -> Option<char> {
@@ -146,7 +146,45 @@ mod tests {
         false
     }
 
-    fn has_repeated_adjacent_wall_color(maze: &Maze) -> bool {
+    fn route_exists_through(maze: &Maze, waypoint: (usize, usize)) -> bool {
+        let player = find_char(maze, 'p').expect("test maze must contain p");
+        let goal = find_char(maze, 'g').expect("test maze must contain g");
+
+        path_exists(maze, player, waypoint) && path_exists(maze, waypoint, goal)
+    }
+
+    fn goal_has_yellow_wall(maze: &Maze) -> bool {
+        let (goal_x, goal_y) = find_char(maze, 'g').expect("test maze must contain g");
+
+        [(1_isize, 0_isize), (-1, 0), (0, 1), (0, -1)]
+            .iter()
+            .any(|(dx, dy)| {
+                let x = goal_x as isize + dx;
+                let y = goal_y as isize + dy;
+
+                x >= 0
+                    && y >= 0
+                    && maze
+                        .get(y as usize)
+                        .and_then(|row| row.get(x as usize))
+                        .is_some_and(|cell| *cell == '!')
+            })
+    }
+
+    fn wall_characters(maze: &Maze) -> Vec<char> {
+        let mut characters = maze
+            .iter()
+            .flatten()
+            .filter(|cell| is_wall(**cell) && **cell != '!')
+            .copied()
+            .collect::<Vec<_>>();
+
+        characters.sort_unstable();
+        characters.dedup();
+        characters
+    }
+
+    fn repeated_adjacent_wall_color(maze: &Maze) -> Option<char> {
         for (y, row) in maze.iter().enumerate() {
             for (x, cell) in row.iter().enumerate() {
                 if !is_wall(*cell) {
@@ -154,16 +192,28 @@ mod tests {
                 }
 
                 if x + 1 < row.len() && row[x + 1] == *cell {
-                    return true;
+                    return Some(*cell);
                 }
 
                 if y + 1 < maze.len() && maze[y + 1][x] == *cell {
-                    return true;
+                    return Some(*cell);
                 }
             }
         }
 
-        false
+        None
+    }
+
+    fn yellow_walls_are_only_next_to_goal(maze: &Maze) -> bool {
+        let (goal_x, goal_y) = find_char(maze, 'g').expect("test maze must contain g");
+
+        maze.iter().enumerate().all(|(y, row)| {
+            row.iter().enumerate().all(|(x, cell)| {
+                *cell != '!'
+                    || ((x as isize - goal_x as isize).abs() + (y as isize - goal_y as isize).abs())
+                        == 1
+            })
+        })
     }
 
     #[test]
@@ -171,22 +221,40 @@ mod tests {
         let maze = maze_from_text(include_str!("../maze.txt"));
 
         assert!(validate_maze(&maze));
-        assert_eq!(maze.len(), 11);
-        assert!(maze.iter().all(|row| row.len() == 15));
+        assert_eq!(maze.len(), 13);
+        assert!(maze.iter().all(|row| row.len() == 19));
 
         let player = find_char(&maze, 'p').expect("test maze must contain p");
         let goal = find_char(&maze, 'g').expect("test maze must contain g");
 
         assert_eq!(player, (1, 1));
-        assert_eq!(goal, (13, 9));
+        assert_eq!(goal, (16, 11));
         assert!(path_exists(&maze, player, goal));
     }
 
     #[test]
-    fn project_maze_has_no_adjacent_walls_with_same_color() {
+    fn project_maze_has_three_routes_to_goal() {
         let maze = maze_from_text(include_str!("../maze.txt"));
 
-        assert!(!has_repeated_adjacent_wall_color(&maze));
+        assert!(route_exists_through(&maze, (5, 1)));
+        assert!(route_exists_through(&maze, (1, 7)));
+        assert!(route_exists_through(&maze, (7, 11)));
+    }
+
+    #[test]
+    fn project_maze_has_yellow_wall_next_to_goal() {
+        let maze = maze_from_text(include_str!("../maze.txt"));
+
+        assert!(goal_has_yellow_wall(&maze));
+        assert!(yellow_walls_are_only_next_to_goal(&maze));
+    }
+
+    #[test]
+    fn project_maze_uses_five_wall_colors_without_repeated_neighbors() {
+        let maze = maze_from_text(include_str!("../maze.txt"));
+
+        assert_eq!(wall_characters(&maze), vec!['#', '%', '&', '+', '@']);
+        assert_eq!(repeated_adjacent_wall_color(&maze), None);
     }
 
     #[test]

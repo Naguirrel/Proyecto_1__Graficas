@@ -19,7 +19,8 @@ jugador llega a la meta `g`.
 - Colisiones y wall sliding.
 - Fish-eye correction.
 - Salto.
-- Diferentes tipos y colores de pared.
+- Cinco colores normales de pared sin colores repetidos en paredes adyacentes.
+- Paredes amarillas reservadas solo para la meta.
 - Bresenham para rasterizacion de lineas, rayos y stakes.
 - Meta y condicion de victoria.
 
@@ -80,7 +81,8 @@ por paredes.
 
 Caracteres reconocidos:
 
-- `#`, `+`, `%`, `@`: paredes con diferentes colores
+- `#`, `+`, `%`, `@`, `&`: paredes con cinco colores diferentes
+- `!`: paredes amarillas reservadas para la meta
 - espacio: piso transitable
 - `p`: inicio del jugador
 - `g`: meta

@@ -8,6 +8,8 @@ const WALL_COLOR: u32 = 0x3b82f6;
 const WALL_PLUS_COLOR: u32 = 0xef4444;
 const WALL_PERCENT_COLOR: u32 = 0x22c55e;
 const WALL_AT_COLOR: u32 = 0xa855f7;
+const WALL_AMPERSAND_COLOR: u32 = 0xf97316;
+const GOAL_WALL_COLOR: u32 = 0xfacc15;
 const PATH_COLOR: u32 = 0xd1d5db;
 const GOAL_COLOR: u32 = 0xfacc15;
 const PLAYER_COLOR: u32 = 0x00e5ff;
@@ -165,6 +167,8 @@ fn draw_cell(framebuffer: &mut Framebuffer, x0: usize, y0: usize, block_size: us
         '+' => WALL_PLUS_COLOR,
         '%' => WALL_PERCENT_COLOR,
         '@' => WALL_AT_COLOR,
+        '&' => WALL_AMPERSAND_COLOR,
+        '!' => GOAL_WALL_COLOR,
         ' ' | 'p' => PATH_COLOR,
         'g' => GOAL_COLOR,
         _ => UNKNOWN_COLOR,
@@ -222,6 +226,8 @@ fn wall_color(impact: char) -> u32 {
         '+' => WALL_PLUS_COLOR,
         '%' => WALL_PERCENT_COLOR,
         '@' => WALL_AT_COLOR,
+        '&' => WALL_AMPERSAND_COLOR,
+        '!' => GOAL_WALL_COLOR,
         _ => UNKNOWN_COLOR,
     }
 }
@@ -394,8 +400,12 @@ mod tests {
         assert_eq!(wall_color('+'), WALL_PLUS_COLOR);
         assert_eq!(wall_color('%'), WALL_PERCENT_COLOR);
         assert_eq!(wall_color('@'), WALL_AT_COLOR);
+        assert_eq!(wall_color('&'), WALL_AMPERSAND_COLOR);
+        assert_eq!(wall_color('!'), GOAL_WALL_COLOR);
         assert_ne!(wall_color('#'), wall_color('+'));
         assert_ne!(wall_color('+'), wall_color('%'));
         assert_ne!(wall_color('%'), wall_color('@'));
+        assert_ne!(wall_color('@'), wall_color('&'));
+        assert_ne!(wall_color('&'), wall_color('!'));
     }
 }

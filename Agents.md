@@ -50,6 +50,10 @@ cargo fmt
 
 ## Maze Rules
 
-The maze must be rectangular, fully bordered by `#`, and contain exactly one
-`p` and one `g`. Walkable cells are space, `p`, and `g`; all other tile
-characters are treated as walls or unknown renderable cells.
+The maze must be rectangular, fully bordered by wall characters, and contain
+exactly one `p` and one `g`. Walkable cells are space, `p`, and `g`.
+
+Wall characters are `#`, `+`, `%`, `@`, `&`, and `!`. The normal wall colors
+are `#`, `+`, `%`, `@`, and `&`; adjacent wall cells must not use the same
+character/color. The yellow wall character `!` is reserved only for walls
+directly next to the goal.
