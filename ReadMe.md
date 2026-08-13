@@ -1,56 +1,61 @@
 # Proyecto #1 Graficas
 
-Raycasting project written in Rust for a computer graphics course. The program
-loads a maze from `maze.txt`, renders a 2D map with rays, and can switch to a
-simple first-person 3D projection.
+Proyecto de raycasting escrito en Rust para el curso de Graficas por
+Computadora. El programa carga un laberinto desde `maze.txt`, renderiza un mapa
+2D con rayos y permite cambiar a una proyeccion 3D simple en primera persona.
 
-## Requirements
+## Requisitos
 
-- Rust toolchain with Cargo
-- A desktop environment that can open a `minifb` window
+- Toolchain de Rust con Cargo
+- Un entorno de escritorio que pueda abrir una ventana de `minifb`
 
-## Run
+## Ejecutar
 
 ```bash
 cargo run
 ```
 
-## Controls
+## Controles
 
-- `W`: move forward
-- `S`: move backward
-- `A`: rotate left
-- `D`: rotate right
-- `Space`: jump
-- `Tab`: switch between 2D and 3D render modes
-- `Esc`: close the window
+- `W`: avanzar
+- `S`: retroceder
+- `A`: girar a la izquierda
+- `D`: girar a la derecha
+- `Space`: saltar
+- `Tab`: cambiar entre los modos de renderizado 2D y 3D
+- `Esc`: cerrar la ventana
 
-## Test
+## Pruebas
 
 ```bash
 cargo test
 ```
 
-## Project Structure
+## Estructura del Proyecto
 
-- `src/main.rs`: application loop, window setup, render mode switching
-- `src/maze.rs`: maze loading, validation, tile lookup, and walkability rules
-- `src/player.rs`: player position, angle, field of view, and jump state
-- `src/input.rs`: keyboard handling and movement collision checks
-- `src/caster.rs`: raycasting logic for 2D rays and 3D wall hits
-- `src/render.rs`: 2D map rendering, 3D projection, and color mapping
-- `src/framebuffer.rs`: pixel buffer abstraction used by the renderer
-- `src/line.rs`: line drawing helper
-- `maze.txt`: editable maze source
+- `src/main.rs`: ciclo principal, configuracion de la ventana y cambio de modo
+  de renderizado
+- `src/maze.rs`: carga, validacion, consulta de celdas y reglas de movimiento
+  del laberinto
+- `src/player.rs`: posicion, angulo, campo de vision y estado de salto del
+  jugador
+- `src/input.rs`: manejo del teclado y validacion de colisiones al moverse
+- `src/caster.rs`: logica de raycasting para rayos 2D e impactos de paredes 3D
+- `src/render.rs`: renderizado del mapa 2D, proyeccion 3D y asignacion de
+  colores
+- `src/framebuffer.rs`: abstraccion del buffer de pixeles usado por el renderer
+- `src/line.rs`: helper para dibujar lineas
+- `maze.txt`: archivo editable con el laberinto
 
-## Maze Format
+## Formato del Laberinto
 
-The maze is a rectangular text file. It must contain exactly one player start
-(`p`) and one goal (`g`). The outside border must be walls.
+El laberinto es un archivo de texto rectangular. Debe contener exactamente un
+inicio del jugador (`p`) y una meta (`g`). El borde exterior debe estar formado
+por paredes.
 
-Known tile characters:
+Caracteres reconocidos:
 
-- `#`, `+`, `%`, `@`: walls with different colors
-- space: walkable floor
-- `p`: player start
-- `g`: goal
+- `#`, `+`, `%`, `@`: paredes con diferentes colores
+- espacio: piso transitable
+- `p`: inicio del jugador
+- `g`: meta
