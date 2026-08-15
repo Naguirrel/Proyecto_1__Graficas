@@ -41,6 +41,7 @@ W       Avanzar
 S       Retroceder
 A       Girar izquierda
 D       Girar derecha
+Mouse   Girar camara horizontalmente
 SPACE   Saltar
 TAB     Alternar 2D / 3D
 ESC     Salir

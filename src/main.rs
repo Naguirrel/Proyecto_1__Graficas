@@ -10,7 +10,7 @@ mod render;
 use caster::cast_fov_2d;
 use framebuffer::Framebuffer;
 use game::{GameState, player_reached_goal, reset_player};
-use input::process_input;
+use input::{MouseLook, process_input};
 use maze::{find_char, load_maze, validate_maze};
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
@@ -107,6 +107,7 @@ fn main() -> Result<(), minifb::Error> {
     let mut render_mode = RenderMode::Mode2D;
     let mut game_state = GameState::Playing;
     let mut fps_counter = FpsCounter::new();
+    let mut mouse_look = MouseLook::new();
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let current_time = Instant::now();
@@ -119,7 +120,14 @@ fn main() -> Result<(), minifb::Error> {
 
         match game_state {
             GameState::Playing => {
-                process_input(&window, &mut player, &maze, BLOCK_SIZE, delta_time);
+                process_input(
+                    &window,
+                    &mut player,
+                    &mut mouse_look,
+                    &maze,
+                    BLOCK_SIZE,
+                    delta_time,
+                );
 
                 if player_reached_goal(&maze, &player, BLOCK_SIZE) {
                     game_state = GameState::Won;
@@ -132,6 +140,8 @@ fn main() -> Result<(), minifb::Error> {
                     reset_player(&mut player, player_start, BLOCK_SIZE);
                     game_state = GameState::Playing;
                 }
+
+                mouse_look.reset();
             }
         }
 
