@@ -169,6 +169,29 @@ pub fn texture_x_from_hit(
     tx.min(texture_width - 1)
 }
 
+/// Calcula la fila vertical de textura para un pixel visible de una stake.
+/// Usa la stake original sin clipping. Retorna 0 para geometria invalida.
+pub fn texture_y_for_stake(
+    screen_y: isize,
+    unclipped_stake_top: f32,
+    unclipped_stake_bottom: f32,
+    texture_height: usize,
+) -> usize {
+    if texture_height == 0
+        || !unclipped_stake_top.is_finite()
+        || !unclipped_stake_bottom.is_finite()
+        || unclipped_stake_bottom <= unclipped_stake_top
+    {
+        return 0;
+    }
+
+    let stake_height = unclipped_stake_bottom - unclipped_stake_top;
+    let relative_y = ((screen_y as f32 - unclipped_stake_top) / stake_height).clamp(0.0, 1.0);
+    let ty = (relative_y * texture_height as f32).floor() as usize;
+
+    ty.min(texture_height - 1)
+}
+
 pub struct TextureManager {
     textures: HashMap<char, Texture>,
     fallback: Texture,
@@ -414,5 +437,51 @@ mod tests {
         );
 
         assert!(tx < texture_width);
+    }
+
+    #[test]
+    fn texture_y_at_unclipped_stake_top_is_zero() {
+        let ty = texture_y_for_stake(100, 100.0, 300.0, 32);
+
+        assert_eq!(ty, 0);
+    }
+
+    #[test]
+    fn texture_y_at_unclipped_stake_center_is_middle_row() {
+        let ty = texture_y_for_stake(200, 100.0, 300.0, 32);
+
+        assert_eq!(ty, 16);
+    }
+
+    #[test]
+    fn texture_y_clamps_near_unclipped_stake_bottom() {
+        let ty = texture_y_for_stake(300, 100.0, 300.0, 32);
+
+        assert_eq!(ty, 31);
+    }
+
+    #[test]
+    fn texture_y_uses_unclipped_stake_bounds_after_clipping() {
+        let ty = texture_y_for_stake(0, -200.0, 800.0, 100);
+
+        assert_eq!(ty, 20);
+    }
+
+    #[test]
+    fn texture_y_clamps_screen_y_outside_valid_stake() {
+        let before_top = texture_y_for_stake(50, 100.0, 300.0, 32);
+        let after_bottom = texture_y_for_stake(350, 100.0, 300.0, 32);
+
+        assert_eq!(before_top, 0);
+        assert_eq!(after_bottom, 31);
+    }
+
+    #[test]
+    fn texture_y_returns_zero_for_invalid_inputs() {
+        assert_eq!(texture_y_for_stake(100, 100.0, 300.0, 0), 0);
+        assert_eq!(texture_y_for_stake(100, 100.0, 100.0, 32), 0);
+        assert_eq!(texture_y_for_stake(100, 300.0, 100.0, 32), 0);
+        assert_eq!(texture_y_for_stake(100, f32::NAN, 300.0, 32), 0);
+        assert_eq!(texture_y_for_stake(100, 100.0, f32::INFINITY, 32), 0);
     }
 }
