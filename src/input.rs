@@ -1,18 +1,35 @@
 use std::f32::consts::PI;
 
-use minifb::{Key, KeyRepeat, Window};
+use minifb::{Key, KeyRepeat, MouseMode, Window};
 
 use crate::maze::{Maze, is_walkable};
 use crate::player::Player;
 
 const MOVEMENT_SPEED: f32 = 100.0;
 const ROTATION_SPEED: f32 = 2.0;
+const MOUSE_SENSITIVITY: f32 = 0.003;
+const MAX_MOUSE_DELTA: f32 = 100.0;
 const JUMP_SPEED: f32 = 220.0;
 const GRAVITY: f32 = 600.0;
+
+pub struct MouseLook {
+    previous_x: Option<f32>,
+}
+
+impl MouseLook {
+    pub fn new() -> Self {
+        Self { previous_x: None }
+    }
+
+    pub fn reset(&mut self) {
+        self.previous_x = None;
+    }
+}
 
 pub fn process_input(
     window: &Window,
     player: &mut Player,
+    mouse_look: &mut MouseLook,
     maze: &Maze,
     block_size: usize,
     delta_time: f32,
@@ -53,6 +70,8 @@ pub fn process_input(
         player.a += rotation;
     }
 
+    process_mouse_look(window, player, mouse_look);
+
     player.a = player.a.rem_euclid(2.0 * PI);
 
     if window.is_key_pressed(Key::Space, KeyRepeat::No) {
@@ -60,4 +79,50 @@ pub fn process_input(
     }
 
     player.update_vertical_motion(delta_time, GRAVITY);
+}
+
+fn process_mouse_look(window: &Window, player: &mut Player, mouse_look: &mut MouseLook) {
+    let Some((current_x, _)) = window.get_mouse_pos(MouseMode::Discard) else {
+        mouse_look.reset();
+        return;
+    };
+
+    let Some(previous_x) = mouse_look.previous_x.replace(current_x) else {
+        return;
+    };
+
+    let delta_x = (current_x - previous_x).clamp(-MAX_MOUSE_DELTA, MAX_MOUSE_DELTA);
+    player.a += mouse_delta_to_rotation(delta_x);
+}
+
+fn mouse_delta_to_rotation(delta_x: f32) -> f32 {
+    delta_x * MOUSE_SENSITIVITY
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mouse_delta_to_rotation_is_positive_when_mouse_moves_right() {
+        assert!(mouse_delta_to_rotation(10.0) > 0.0);
+    }
+
+    #[test]
+    fn mouse_delta_to_rotation_is_negative_when_mouse_moves_left() {
+        assert!(mouse_delta_to_rotation(-10.0) < 0.0);
+    }
+
+    #[test]
+    fn mouse_delta_to_rotation_is_zero_without_mouse_movement() {
+        assert_eq!(mouse_delta_to_rotation(0.0), 0.0);
+    }
+
+    #[test]
+    fn mouse_delta_to_rotation_scales_with_delta() {
+        let small_rotation = mouse_delta_to_rotation(5.0);
+        let large_rotation = mouse_delta_to_rotation(10.0);
+
+        assert!(large_rotation > small_rotation);
+    }
 }
