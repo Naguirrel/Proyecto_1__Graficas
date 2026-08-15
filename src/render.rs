@@ -27,6 +27,18 @@ const FPS_OVERLAY_X: isize = 10;
 const FPS_OVERLAY_Y: isize = 10;
 const FPS_OVERLAY_PADDING: isize = 6;
 const FPS_OVERLAY_SCALE: isize = 3;
+const MINIMAP_CELL_SIZE: usize = 6;
+const MINIMAP_MARGIN: usize = 10;
+const MINIMAP_PADDING: usize = 4;
+const MINIMAP_BACKGROUND_COLOR: u32 = 0x111111;
+const MINIMAP_BORDER_COLOR: u32 = 0xfff7ed;
+const MINIMAP_WALL_COLOR: u32 = 0xd1d5db;
+const MINIMAP_PATH_COLOR: u32 = 0x1f2937;
+const MINIMAP_GOAL_COLOR: u32 = 0xfacc15;
+const MINIMAP_PLAYER_COLOR: u32 = PLAYER_COLOR;
+const MINIMAP_DIRECTION_COLOR: u32 = PLAYER_DIRECTION_COLOR;
+const MINIMAP_PLAYER_SIZE: isize = 2;
+const MINIMAP_DIRECTION_LENGTH: f32 = 10.0;
 const PLAYER_SIZE: isize = 4;
 const DIRECTION_LENGTH: f32 = 30.0;
 const JUMP_VISUAL_SCALE: f32 = 1.0;
@@ -194,6 +206,48 @@ pub fn render_fps_overlay(framebuffer: &mut Framebuffer, fps: u32) {
     );
 }
 
+pub fn render_minimap(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    player: &Player,
+    block_size: usize,
+) {
+    if maze.is_empty() || block_size == 0 || framebuffer.width == 0 || framebuffer.height == 0 {
+        return;
+    }
+
+    let (minimap_width, minimap_height) = minimap_dimensions(maze);
+
+    if minimap_width == 0 || minimap_height == 0 {
+        return;
+    }
+
+    let (content_x, content_y) = minimap_content_offset(framebuffer, minimap_width, minimap_height);
+    let panel_x = content_x - MINIMAP_PADDING as isize;
+    let panel_y = content_y - MINIMAP_PADDING as isize;
+    let panel_width = (minimap_width + MINIMAP_PADDING * 2) as isize;
+    let panel_height = (minimap_height + MINIMAP_PADDING * 2) as isize;
+
+    fill_rect(
+        framebuffer,
+        panel_x,
+        panel_y,
+        panel_width,
+        panel_height,
+        MINIMAP_BACKGROUND_COLOR,
+    );
+    draw_rect_outline(
+        framebuffer,
+        panel_x,
+        panel_y,
+        panel_width,
+        panel_height,
+        MINIMAP_BORDER_COLOR,
+    );
+    render_minimap_maze(framebuffer, maze, content_x, content_y);
+    render_minimap_player(framebuffer, player, block_size, content_x, content_y);
+}
+
 fn draw_cell(framebuffer: &mut Framebuffer, x0: usize, y0: usize, block_size: usize, cell: char) {
     let color = match cell {
         '#' => WALL_COLOR,
@@ -216,6 +270,119 @@ fn draw_cell(framebuffer: &mut Framebuffer, x0: usize, y0: usize, block_size: us
         for x in 0..visible_size {
             framebuffer.point((x0 + x) as isize, (y0 + y) as isize);
         }
+    }
+}
+
+fn render_minimap_maze(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    offset_x: isize,
+    offset_y: isize,
+) {
+    for (row_index, row) in maze.iter().enumerate() {
+        for (column_index, cell) in row.iter().enumerate() {
+            let x = offset_x + (column_index * MINIMAP_CELL_SIZE) as isize;
+            let y = offset_y + (row_index * MINIMAP_CELL_SIZE) as isize;
+
+            fill_rect(
+                framebuffer,
+                x,
+                y,
+                MINIMAP_CELL_SIZE as isize,
+                MINIMAP_CELL_SIZE as isize,
+                minimap_cell_color(*cell),
+            );
+        }
+    }
+}
+
+fn render_minimap_player(
+    framebuffer: &mut Framebuffer,
+    player: &Player,
+    block_size: usize,
+    offset_x: isize,
+    offset_y: isize,
+) {
+    let Some((player_x, player_y)) =
+        minimap_player_position(player, block_size, offset_x, offset_y)
+    else {
+        return;
+    };
+
+    framebuffer.set_current_color(MINIMAP_PLAYER_COLOR);
+
+    for y in -MINIMAP_PLAYER_SIZE..=MINIMAP_PLAYER_SIZE {
+        for x in -MINIMAP_PLAYER_SIZE..=MINIMAP_PLAYER_SIZE {
+            framebuffer.point(player_x + x, player_y + y);
+        }
+    }
+
+    let direction_end_x = player_x + (player.a.cos() * MINIMAP_DIRECTION_LENGTH).round() as isize;
+    let direction_end_y = player_y + (player.a.sin() * MINIMAP_DIRECTION_LENGTH).round() as isize;
+
+    framebuffer.set_current_color(MINIMAP_DIRECTION_COLOR);
+    line(
+        framebuffer,
+        player_x,
+        player_y,
+        direction_end_x,
+        direction_end_y,
+    );
+}
+
+fn minimap_dimensions(maze: &Maze) -> (usize, usize) {
+    let width = maze.iter().map(|row| row.len()).max().unwrap_or(0) * MINIMAP_CELL_SIZE;
+    let height = maze.len() * MINIMAP_CELL_SIZE;
+
+    (width, height)
+}
+
+fn minimap_content_offset(
+    framebuffer: &Framebuffer,
+    minimap_width: usize,
+    minimap_height: usize,
+) -> (isize, isize) {
+    let panel_width = minimap_width + MINIMAP_PADDING * 2;
+    let panel_height = minimap_height + MINIMAP_PADDING * 2;
+    let panel_x = framebuffer
+        .width
+        .saturating_sub(panel_width + MINIMAP_MARGIN);
+    let panel_y = framebuffer
+        .height
+        .saturating_sub(panel_height + MINIMAP_MARGIN)
+        .min(MINIMAP_MARGIN);
+
+    (
+        (panel_x + MINIMAP_PADDING) as isize,
+        (panel_y + MINIMAP_PADDING) as isize,
+    )
+}
+
+fn minimap_player_position(
+    player: &Player,
+    block_size: usize,
+    offset_x: isize,
+    offset_y: isize,
+) -> Option<(isize, isize)> {
+    if block_size == 0 || !player.pos.x.is_finite() || !player.pos.y.is_finite() {
+        return None;
+    }
+
+    let maze_x = player.pos.x / block_size as f32;
+    let maze_y = player.pos.y / block_size as f32;
+
+    Some((
+        offset_x + (maze_x * MINIMAP_CELL_SIZE as f32).round() as isize,
+        offset_y + (maze_y * MINIMAP_CELL_SIZE as f32).round() as isize,
+    ))
+}
+
+fn minimap_cell_color(cell: char) -> u32 {
+    match cell {
+        '#' | '+' | '%' | '@' | '&' | '!' => MINIMAP_WALL_COLOR,
+        'g' => MINIMAP_GOAL_COLOR,
+        ' ' | 'p' => MINIMAP_PATH_COLOR,
+        _ => UNKNOWN_COLOR,
     }
 }
 
@@ -283,6 +450,10 @@ fn fill_rect(
     height: isize,
     color: u32,
 ) {
+    if width <= 0 || height <= 0 {
+        return;
+    }
+
     framebuffer.set_current_color(color);
 
     for row in y..y + height {
@@ -290,6 +461,28 @@ fn fill_rect(
             framebuffer.point(column, row);
         }
     }
+}
+
+fn draw_rect_outline(
+    framebuffer: &mut Framebuffer,
+    x: isize,
+    y: isize,
+    width: isize,
+    height: isize,
+    color: u32,
+) {
+    if width <= 0 || height <= 0 {
+        return;
+    }
+
+    let right = x + width - 1;
+    let bottom = y + height - 1;
+
+    framebuffer.set_current_color(color);
+    line(framebuffer, x, y, right, y);
+    line(framebuffer, right, y, right, bottom);
+    line(framebuffer, right, bottom, x, bottom);
+    line(framebuffer, x, bottom, x, y);
 }
 
 fn draw_text_centered(
@@ -496,5 +689,39 @@ mod tests {
         assert_ne!(wall_color('%'), wall_color('@'));
         assert_ne!(wall_color('@'), wall_color('&'));
         assert_ne!(wall_color('&'), wall_color('!'));
+    }
+
+    #[test]
+    fn project_maze_minimap_dimensions_use_small_cells() {
+        let maze = include_str!("../maze.txt")
+            .lines()
+            .map(|line| line.chars().collect())
+            .collect::<Maze>();
+
+        assert_eq!(minimap_dimensions(&maze), (114, 78));
+    }
+
+    #[test]
+    fn minimap_offset_stays_in_top_right_corner() {
+        let framebuffer = Framebuffer::new(800, 600);
+
+        assert_eq!(minimap_content_offset(&framebuffer, 114, 78), (672, 14));
+    }
+
+    #[test]
+    fn minimap_offset_does_not_underflow_on_small_framebuffer() {
+        let framebuffer = Framebuffer::new(40, 30);
+
+        assert_eq!(minimap_content_offset(&framebuffer, 114, 78), (4, 4));
+    }
+
+    #[test]
+    fn minimap_player_position_uses_world_space() {
+        let player = Player::new(1, 1, 40);
+
+        assert_eq!(
+            minimap_player_position(&player, 40, 672, 14),
+            Some((681, 23))
+        );
     }
 }

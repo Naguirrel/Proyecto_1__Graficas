@@ -15,7 +15,8 @@ use maze::{find_char, load_maze, validate_maze};
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
 use render::{
-    maze_offset, render_3d, render_fps_overlay, render_maze, render_player, render_victory_screen,
+    maze_offset, render_3d, render_fps_overlay, render_maze, render_minimap, render_player,
+    render_victory_screen,
 };
 use std::time::Instant;
 
@@ -152,6 +153,7 @@ fn main() -> Result<(), minifb::Error> {
                 }
                 RenderMode::Mode3D => {
                     render_3d(&mut framebuffer, &maze, &player, BLOCK_SIZE);
+                    render_minimap(&mut framebuffer, &maze, &player, BLOCK_SIZE);
                 }
             },
             GameState::Won => {
