@@ -14,6 +14,7 @@ jugador llega a la meta `g`.
 - Maze cargado desde archivo.
 - Vista 2D de depuracion.
 - Vista 3D estilo raycaster.
+- Minimapa en la esquina durante la vista 3D.
 - Raycasting con FOV.
 - Movimiento con delta time.
 - Contador de FPS visible durante gameplay.
