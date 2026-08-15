@@ -8,9 +8,19 @@ const STEP_SIZE: f32 = 1.0;
 pub const NUM_RAYS_2D: usize = 60;
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct Intersect {
     pub distance: f32,
     pub impact: char,
+    pub hit_x: f32,
+    pub hit_y: f32,
+    pub side: WallSide,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WallSide {
+    Vertical,
+    Horizontal,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -50,7 +60,13 @@ pub fn cast_ray(
                     draw_line,
                 );
 
-                return Intersect { distance, impact };
+                return Intersect {
+                    distance,
+                    impact,
+                    hit_x: ray_x,
+                    hit_y: ray_y,
+                    side: wall_side_at_hit(ray_x, ray_y, block_size),
+                };
             }
             None => {
                 draw_ray_line(
@@ -66,6 +82,9 @@ pub fn cast_ray(
                 return Intersect {
                     distance,
                     impact: '#',
+                    hit_x: ray_x,
+                    hit_y: ray_y,
+                    side: wall_side_at_hit(ray_x, ray_y, block_size),
                 };
             }
         }
@@ -84,6 +103,9 @@ pub fn cast_ray(
     Intersect {
         distance,
         impact: '#',
+        hit_x: ray_x,
+        hit_y: ray_y,
+        side: wall_side_at_hit(ray_x, ray_y, block_size),
     }
 }
 
@@ -126,6 +148,25 @@ fn max_ray_distance(maze: &Maze, block_size: usize) -> f32 {
     let maze_height = maze.len() * block_size;
 
     ((maze_width * maze_width + maze_height * maze_height) as f32).sqrt()
+}
+
+fn wall_side_at_hit(hit_x: f32, hit_y: f32, block_size: usize) -> WallSide {
+    if block_size == 0 || !hit_x.is_finite() || !hit_y.is_finite() {
+        return WallSide::Vertical;
+    }
+
+    let cell_size = block_size as f32;
+    let local_x = hit_x.rem_euclid(cell_size);
+    let local_y = hit_y.rem_euclid(cell_size);
+    let vertical_distance = local_x.min(cell_size - local_x);
+    let horizontal_distance = local_y.min(cell_size - local_y);
+
+    // En esquinas o empates priorizamos Vertical para que la clasificacion sea determinista.
+    if vertical_distance <= horizontal_distance {
+        WallSide::Vertical
+    } else {
+        WallSide::Horizontal
+    }
 }
 
 fn draw_ray_line(
@@ -177,6 +218,19 @@ mod tests {
         );
     }
 
+    fn assert_hit_position_close(intersection: Intersect, expected_x: f32, expected_y: f32) {
+        assert!(
+            (intersection.hit_x - expected_x).abs() <= STEP_SIZE,
+            "expected hit_x near {expected_x}, got {}",
+            intersection.hit_x
+        );
+        assert!(
+            (intersection.hit_y - expected_y).abs() <= STEP_SIZE,
+            "expected hit_y near {expected_y}, got {}",
+            intersection.hit_y
+        );
+    }
+
     #[test]
     fn cast_ray_hits_first_wall_in_cardinal_directions() {
         let maze = test_maze();
@@ -218,6 +272,148 @@ mod tests {
         cast_ray(&mut framebuffer, &maze, &player, 0.0, 10, 0, 0, false);
 
         assert!(framebuffer.buffer.iter().all(|pixel| *pixel == 0));
+    }
+
+    #[test]
+    fn cast_ray_reports_right_hit_position_in_world_space() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let intersection = cast_ray(&mut framebuffer, &maze, &player, 0.0, 10, 9, 11, false);
+
+        assert_eq!(intersection.impact, '#');
+        assert_hit_position_close(intersection, 40.0, 25.0);
+        assert!(intersection.distance.is_finite());
+        assert!(intersection.hit_x.is_finite());
+        assert!(intersection.hit_y.is_finite());
+    }
+
+    #[test]
+    fn cast_ray_reports_left_hit_position_in_world_space() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let intersection = cast_ray(&mut framebuffer, &maze, &player, PI, 10, 0, 0, false);
+
+        assert_eq!(intersection.impact, '#');
+        assert_hit_position_close(intersection, 9.0, 25.0);
+        assert!(intersection.distance.is_finite());
+        assert!(intersection.hit_x.is_finite());
+        assert!(intersection.hit_y.is_finite());
+    }
+
+    #[test]
+    fn cast_ray_reports_down_hit_position_in_world_space() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let intersection = cast_ray(&mut framebuffer, &maze, &player, PI / 2.0, 10, 0, 0, false);
+
+        assert_eq!(intersection.impact, '#');
+        assert_hit_position_close(intersection, 25.0, 40.0);
+        assert!(intersection.distance.is_finite());
+        assert!(intersection.hit_x.is_finite());
+        assert!(intersection.hit_y.is_finite());
+    }
+
+    #[test]
+    fn cast_ray_reports_up_hit_position_in_world_space() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let intersection = cast_ray(
+            &mut framebuffer,
+            &maze,
+            &player,
+            3.0 * PI / 2.0,
+            10,
+            0,
+            0,
+            false,
+        );
+
+        assert_eq!(intersection.impact, '#');
+        assert_hit_position_close(intersection, 25.0, 9.0);
+        assert!(intersection.distance.is_finite());
+        assert!(intersection.hit_x.is_finite());
+        assert!(intersection.hit_y.is_finite());
+    }
+
+    #[test]
+    fn cast_ray_reports_vertical_side_for_left_and_right_hits() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let right = cast_ray(&mut framebuffer, &maze, &player, 0.0, 10, 0, 0, false);
+        let left = cast_ray(&mut framebuffer, &maze, &player, PI, 10, 0, 0, false);
+
+        assert_eq!(right.side, WallSide::Vertical);
+        assert_eq!(left.side, WallSide::Vertical);
+    }
+
+    #[test]
+    fn cast_ray_reports_horizontal_side_for_up_and_down_hits() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let down = cast_ray(&mut framebuffer, &maze, &player, PI / 2.0, 10, 0, 0, false);
+        let up = cast_ray(
+            &mut framebuffer,
+            &maze,
+            &player,
+            3.0 * PI / 2.0,
+            10,
+            0,
+            0,
+            false,
+        );
+
+        assert_eq!(down.side, WallSide::Horizontal);
+        assert_eq!(up.side, WallSide::Horizontal);
+    }
+
+    #[test]
+    fn wall_side_tie_prefers_vertical() {
+        assert_eq!(wall_side_at_hit(5.0, 5.0, 10), WallSide::Vertical);
+    }
+
+    #[test]
+    fn cast_ray_with_zero_block_size_returns_finite_hit_info() {
+        let maze = test_maze();
+        let player = test_player();
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let intersection = cast_ray(&mut framebuffer, &maze, &player, 0.0, 0, 0, 0, false);
+
+        assert_eq!(intersection.impact, '#');
+        assert_eq!(intersection.side, WallSide::Vertical);
+        assert!(intersection.distance.is_finite());
+        assert!(intersection.hit_x.is_finite());
+        assert!(intersection.hit_y.is_finite());
+    }
+
+    #[test]
+    fn cast_ray_outside_maze_returns_finite_fallback_hit_info() {
+        let maze = vec!["p ".chars().collect()];
+        let player = Player::new(0, 0, 10);
+        let mut framebuffer = Framebuffer::new(80, 80);
+
+        let intersection = cast_ray(&mut framebuffer, &maze, &player, 0.0, 10, 0, 0, false);
+
+        assert_eq!(intersection.impact, '#');
+        assert!(matches!(
+            intersection.side,
+            WallSide::Vertical | WallSide::Horizontal
+        ));
+        assert!(intersection.distance.is_finite());
+        assert!(intersection.hit_x.is_finite());
+        assert!(intersection.hit_y.is_finite());
     }
 
     #[test]

@@ -3,6 +3,8 @@ use std::error::Error;
 use std::fmt;
 use std::path::Path;
 
+use crate::caster::WallSide;
+
 const DEFAULT_TEXTURE_PATHS: [(char, &str); 4] = [
     ('#', "assets/wall1.png"),
     ('+', "assets/wall2.png"),
@@ -143,6 +145,53 @@ impl Texture {
     }
 }
 
+/// Calcula la columna horizontal de textura para un impacto de rayo.
+/// Retorna 0 para entradas invalidas y evita panics en el renderer futuro.
+pub fn texture_x_from_hit(
+    hit_x: f32,
+    hit_y: f32,
+    side: WallSide,
+    block_size: usize,
+    texture_width: usize,
+) -> usize {
+    if block_size == 0 || texture_width == 0 || !hit_x.is_finite() || !hit_y.is_finite() {
+        return 0;
+    }
+
+    let cell_size = block_size as f32;
+    let local = match side {
+        WallSide::Vertical => hit_y.rem_euclid(cell_size),
+        WallSide::Horizontal => hit_x.rem_euclid(cell_size),
+    };
+    let u = local / cell_size;
+    let tx = (u * texture_width as f32).floor() as usize;
+
+    tx.min(texture_width - 1)
+}
+
+/// Calcula la fila vertical de textura para un pixel visible de una stake.
+/// Usa la stake original sin clipping. Retorna 0 para geometria invalida.
+pub fn texture_y_for_stake(
+    screen_y: isize,
+    unclipped_stake_top: f32,
+    unclipped_stake_bottom: f32,
+    texture_height: usize,
+) -> usize {
+    if texture_height == 0
+        || !unclipped_stake_top.is_finite()
+        || !unclipped_stake_bottom.is_finite()
+        || unclipped_stake_bottom <= unclipped_stake_top
+    {
+        return 0;
+    }
+
+    let stake_height = unclipped_stake_bottom - unclipped_stake_top;
+    let relative_y = ((screen_y as f32 - unclipped_stake_top) / stake_height).clamp(0.0, 1.0);
+    let ty = (relative_y * texture_height as f32).floor() as usize;
+
+    ty.min(texture_height - 1)
+}
+
 pub struct TextureManager {
     textures: HashMap<char, Texture>,
     fallback: Texture,
@@ -186,6 +235,11 @@ fn rgb_to_u32(r: u8, g: u8, b: u8) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use crate::caster::cast_ray;
+    use crate::framebuffer::Framebuffer;
+    use crate::maze::Maze;
+    use crate::player::Player;
+
     use super::*;
 
     fn sample_texture() -> Texture {
@@ -201,6 +255,16 @@ mod tests {
         textures.insert('@', Texture::new(1, 1, vec![0x444444]).unwrap());
 
         TextureManager::new(textures, Texture::fallback())
+    }
+
+    fn raycast_test_maze() -> Maze {
+        vec![
+            "#####".chars().collect(),
+            "#   #".chars().collect(),
+            "# p #".chars().collect(),
+            "#   #".chars().collect(),
+            "#####".chars().collect(),
+        ]
     }
 
     #[test]
@@ -290,5 +354,134 @@ mod tests {
 
         assert!(std::ptr::eq(manager.get('#'), stored_texture));
         assert!(std::ptr::eq(manager.get('#'), manager.get('#')));
+    }
+
+    #[test]
+    fn texture_x_for_vertical_wall_uses_hit_y() {
+        let tx = texture_x_from_hit(80.0, 10.0, WallSide::Vertical, 40, 32);
+
+        assert_eq!(tx, 8);
+    }
+
+    #[test]
+    fn texture_x_for_horizontal_wall_uses_hit_x() {
+        let tx = texture_x_from_hit(30.0, 80.0, WallSide::Horizontal, 40, 32);
+
+        assert_eq!(tx, 24);
+    }
+
+    #[test]
+    fn texture_x_repeats_for_each_cell() {
+        let first = texture_x_from_hit(80.0, 10.0, WallSide::Vertical, 40, 32);
+        let second = texture_x_from_hit(80.0, 50.0, WallSide::Vertical, 40, 32);
+        let third = texture_x_from_hit(80.0, 90.0, WallSide::Vertical, 40, 32);
+
+        assert_eq!(first, second);
+        assert_eq!(second, third);
+        assert_eq!(first, 8);
+    }
+
+    #[test]
+    fn texture_x_clamps_near_end_of_texture() {
+        let tx = texture_x_from_hit(80.0, 39.999, WallSide::Vertical, 40, 32);
+
+        assert_eq!(tx, 31);
+    }
+
+    #[test]
+    fn texture_x_at_cell_start_is_zero() {
+        let vertical = texture_x_from_hit(80.0, 0.0, WallSide::Vertical, 40, 32);
+        let horizontal = texture_x_from_hit(0.0, 80.0, WallSide::Horizontal, 40, 32);
+
+        assert_eq!(vertical, 0);
+        assert_eq!(horizontal, 0);
+    }
+
+    #[test]
+    fn texture_x_returns_zero_for_invalid_inputs() {
+        assert_eq!(texture_x_from_hit(10.0, 10.0, WallSide::Vertical, 0, 32), 0);
+        assert_eq!(texture_x_from_hit(10.0, 10.0, WallSide::Vertical, 40, 0), 0);
+        assert_eq!(
+            texture_x_from_hit(f32::NAN, 10.0, WallSide::Horizontal, 40, 32),
+            0
+        );
+        assert_eq!(
+            texture_x_from_hit(10.0, f32::INFINITY, WallSide::Vertical, 40, 32),
+            0
+        );
+    }
+
+    #[test]
+    fn texture_x_accepts_texture_width_from_texture() {
+        let texture =
+            Texture::new(32, 16, vec![0x000000; 32 * 16]).expect("test texture should be valid");
+        let tx = texture_x_from_hit(30.0, 80.0, WallSide::Horizontal, 40, texture.width);
+
+        assert_eq!(tx, 24);
+    }
+
+    #[test]
+    fn texture_x_works_with_cast_ray_intersection() {
+        let maze = raycast_test_maze();
+        let player = Player::new(2, 2, 10);
+        let mut framebuffer = Framebuffer::new(80, 80);
+        let texture_width = 32;
+
+        let intersection = cast_ray(&mut framebuffer, &maze, &player, 0.0, 10, 0, 0, false);
+        let tx = texture_x_from_hit(
+            intersection.hit_x,
+            intersection.hit_y,
+            intersection.side,
+            10,
+            texture_width,
+        );
+
+        assert!(tx < texture_width);
+    }
+
+    #[test]
+    fn texture_y_at_unclipped_stake_top_is_zero() {
+        let ty = texture_y_for_stake(100, 100.0, 300.0, 32);
+
+        assert_eq!(ty, 0);
+    }
+
+    #[test]
+    fn texture_y_at_unclipped_stake_center_is_middle_row() {
+        let ty = texture_y_for_stake(200, 100.0, 300.0, 32);
+
+        assert_eq!(ty, 16);
+    }
+
+    #[test]
+    fn texture_y_clamps_near_unclipped_stake_bottom() {
+        let ty = texture_y_for_stake(300, 100.0, 300.0, 32);
+
+        assert_eq!(ty, 31);
+    }
+
+    #[test]
+    fn texture_y_uses_unclipped_stake_bounds_after_clipping() {
+        let ty = texture_y_for_stake(0, -200.0, 800.0, 100);
+
+        assert_eq!(ty, 20);
+    }
+
+    #[test]
+    fn texture_y_clamps_screen_y_outside_valid_stake() {
+        let before_top = texture_y_for_stake(50, 100.0, 300.0, 32);
+        let after_bottom = texture_y_for_stake(350, 100.0, 300.0, 32);
+
+        assert_eq!(before_top, 0);
+        assert_eq!(after_bottom, 31);
+    }
+
+    #[test]
+    fn texture_y_returns_zero_for_invalid_inputs() {
+        assert_eq!(texture_y_for_stake(100, 100.0, 300.0, 0), 0);
+        assert_eq!(texture_y_for_stake(100, 100.0, 100.0, 32), 0);
+        assert_eq!(texture_y_for_stake(100, 300.0, 100.0, 32), 0);
+        assert_eq!(texture_y_for_stake(100, f32::NAN, 300.0, 32), 0);
+        assert_eq!(texture_y_for_stake(100, 100.0, f32::INFINITY, 32), 0);
     }
 }
