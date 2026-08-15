@@ -85,6 +85,8 @@ cargo test
 El sistema de carga de texturas esta implementado y sera utilizado por el
 renderer 3D en una etapa posterior. Las imagenes se decodifican desde PNG y se
 guardan en memoria como pixeles `u32` compatibles con el framebuffer.
+El sistema de texturas ya puede calcular la columna `tx` correspondiente al
+punto de impacto de un rayo.
 
 Estructura esperada:
 
