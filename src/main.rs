@@ -14,12 +14,46 @@ use input::process_input;
 use maze::{find_char, load_maze, validate_maze};
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
-use render::{maze_offset, render_3d, render_maze, render_player, render_victory_screen};
+use render::{
+    maze_offset, render_3d, render_fps_overlay, render_maze, render_player, render_victory_screen,
+};
 use std::time::Instant;
 
 const WIDTH: usize = 800;
 const HEIGHT: usize = 600;
 const BLOCK_SIZE: usize = 40;
+const FPS_UPDATE_INTERVAL: f32 = 0.5;
+
+struct FpsCounter {
+    frame_count: u32,
+    elapsed: f32,
+    displayed_fps: u32,
+}
+
+impl FpsCounter {
+    fn new() -> Self {
+        Self {
+            frame_count: 0,
+            elapsed: 0.0,
+            displayed_fps: 0,
+        }
+    }
+
+    fn update(&mut self, delta_time: f32) {
+        self.frame_count += 1;
+        self.elapsed += delta_time;
+
+        if self.elapsed >= FPS_UPDATE_INTERVAL {
+            self.displayed_fps = (self.frame_count as f32 / self.elapsed).round() as u32;
+            self.frame_count = 0;
+            self.elapsed = 0.0;
+        }
+    }
+
+    fn fps(&self) -> u32 {
+        self.displayed_fps
+    }
+}
 
 #[derive(Clone, Copy)]
 enum RenderMode {
@@ -71,6 +105,7 @@ fn main() -> Result<(), minifb::Error> {
     let mut last_time = Instant::now();
     let mut render_mode = RenderMode::Mode2D;
     let mut game_state = GameState::Playing;
+    let mut fps_counter = FpsCounter::new();
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let current_time = Instant::now();
@@ -79,6 +114,7 @@ fn main() -> Result<(), minifb::Error> {
             .as_secs_f32()
             .min(0.1);
         last_time = current_time;
+        fps_counter.update(delta_time);
 
         match game_state {
             GameState::Playing => {
@@ -123,8 +159,35 @@ fn main() -> Result<(), minifb::Error> {
             }
         }
 
+        if game_state == GameState::Playing {
+            render_fps_overlay(&mut framebuffer, fps_counter.fps());
+        }
+
         window.update_with_buffer(&framebuffer.buffer, WIDTH, HEIGHT)?;
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fps_counter_starts_at_zero() {
+        let fps_counter = FpsCounter::new();
+
+        assert_eq!(fps_counter.fps(), 0);
+    }
+
+    #[test]
+    fn fps_counter_updates_after_interval() {
+        let mut fps_counter = FpsCounter::new();
+
+        for _ in 0..30 {
+            fps_counter.update(1.0 / 60.0);
+        }
+
+        assert_eq!(fps_counter.fps(), 60);
+    }
 }

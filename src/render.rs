@@ -21,6 +21,12 @@ const VICTORY_BACKGROUND_COLOR: u32 = 0x052e2b;
 const VICTORY_ACCENT_COLOR: u32 = 0xfacc15;
 const VICTORY_TEXT_COLOR: u32 = 0xfff7ed;
 const VICTORY_SHADOW_COLOR: u32 = 0x0f172a;
+const FPS_OVERLAY_BACKGROUND_COLOR: u32 = 0x111111;
+const FPS_OVERLAY_TEXT_COLOR: u32 = 0xfff7ed;
+const FPS_OVERLAY_X: isize = 10;
+const FPS_OVERLAY_Y: isize = 10;
+const FPS_OVERLAY_PADDING: isize = 6;
+const FPS_OVERLAY_SCALE: isize = 3;
 const PLAYER_SIZE: isize = 4;
 const DIRECTION_LENGTH: f32 = 30.0;
 const JUMP_VISUAL_SCALE: f32 = 1.0;
@@ -161,6 +167,33 @@ pub fn render_victory_screen(framebuffer: &mut Framebuffer) {
     draw_text_centered(framebuffer, "ESC SALIR", 390, 5, VICTORY_TEXT_COLOR);
 }
 
+pub fn render_fps_overlay(framebuffer: &mut Framebuffer, fps: u32) {
+    let text = format!("FPS: {fps}");
+    let text_width = text_width(&text, FPS_OVERLAY_SCALE);
+    let text_height = GLYPH_HEIGHT * FPS_OVERLAY_SCALE;
+    let background_x = FPS_OVERLAY_X - FPS_OVERLAY_PADDING;
+    let background_y = FPS_OVERLAY_Y - FPS_OVERLAY_PADDING;
+    let background_width = text_width + FPS_OVERLAY_PADDING * 2;
+    let background_height = text_height + FPS_OVERLAY_PADDING * 2;
+
+    fill_rect(
+        framebuffer,
+        background_x,
+        background_y,
+        background_width,
+        background_height,
+        FPS_OVERLAY_BACKGROUND_COLOR,
+    );
+    draw_text(
+        framebuffer,
+        &text,
+        FPS_OVERLAY_X,
+        FPS_OVERLAY_Y,
+        FPS_OVERLAY_SCALE,
+        FPS_OVERLAY_TEXT_COLOR,
+    );
+}
+
 fn draw_cell(framebuffer: &mut Framebuffer, x0: usize, y0: usize, block_size: usize, cell: char) {
     let color = match cell {
         '#' => WALL_COLOR,
@@ -238,6 +271,23 @@ fn fill_screen(framebuffer: &mut Framebuffer, color: u32) {
     for y in 0..framebuffer.height {
         for x in 0..framebuffer.width {
             framebuffer.point(x as isize, y as isize);
+        }
+    }
+}
+
+fn fill_rect(
+    framebuffer: &mut Framebuffer,
+    x: isize,
+    y: isize,
+    width: isize,
+    height: isize,
+    color: u32,
+) {
+    framebuffer.set_current_color(color);
+
+    for row in y..y + height {
+        for column in x..x + width {
+            framebuffer.point(column, row);
         }
     }
 }
@@ -340,6 +390,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         'E' => Some([
             0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111,
         ]),
+        'F' => Some([
+            0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000,
+        ]),
         'G' => Some([
             0b01111, 0b10000, 0b10000, 0b10111, 0b10001, 0b10001, 0b01111,
         ]),
@@ -352,6 +405,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         'N' => Some([
             0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001,
         ]),
+        'P' => Some([
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000,
+        ]),
         'R' => Some([
             0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001,
         ]),
@@ -360,6 +416,39 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         ]),
         'T' => Some([
             0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+        ]),
+        '0' => Some([
+            0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110,
+        ]),
+        '1' => Some([
+            0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110,
+        ]),
+        '2' => Some([
+            0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111,
+        ]),
+        '3' => Some([
+            0b11110, 0b00001, 0b00001, 0b01110, 0b00001, 0b00001, 0b11110,
+        ]),
+        '4' => Some([
+            0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010,
+        ]),
+        '5' => Some([
+            0b11111, 0b10000, 0b10000, 0b11110, 0b00001, 0b00001, 0b11110,
+        ]),
+        '6' => Some([
+            0b01110, 0b10000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110,
+        ]),
+        '7' => Some([
+            0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000,
+        ]),
+        '8' => Some([
+            0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110,
+        ]),
+        '9' => Some([
+            0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00001, 0b01110,
+        ]),
+        ':' => Some([
+            0b00000, 0b00100, 0b00100, 0b00000, 0b00100, 0b00100, 0b00000,
         ]),
         _ => None,
     }
