@@ -82,13 +82,12 @@ cargo test
 
 ## Texturas
 
-El sistema de carga de texturas esta implementado y sera utilizado por el
-renderer 3D en una etapa posterior. Las imagenes se decodifican desde PNG y se
-guardan en memoria como pixeles `u32` compatibles con el framebuffer.
-El sistema de texturas ya puede calcular la columna `tx` correspondiente al
-punto de impacto de un rayo y la fila `ty` correspondiente a cada pixel visible
-de una stake. Bresenham tambien cuenta con una variante para rasterizar lineas
-con color por pixel, pero las texturas todavia no se integran al render 3D.
+Las paredes del renderer 3D se texturizan con imagenes PNG cargadas desde
+`assets/`. `TextureManager` decodifica los placeholders una sola vez y mantiene
+las imagenes en memoria como pixeles `u32` compatibles con el framebuffer.
+La coordenada `tx` selecciona la columna horizontal segun el impacto del rayo y
+`ty` selecciona la fila vertical de cada pixel visible de la stake. Bresenham
+sigue rasterizando cada stake mediante una variante con color por pixel.
 
 Estructura esperada:
 

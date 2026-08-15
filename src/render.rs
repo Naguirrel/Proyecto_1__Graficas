@@ -1,8 +1,9 @@
 use crate::caster::cast_ray;
 use crate::framebuffer::Framebuffer;
-use crate::line::line;
+use crate::line::{line, line_with_shader};
 use crate::maze::Maze;
 use crate::player::Player;
+use crate::texture::{TextureManager, texture_x_from_hit, texture_y_for_stake};
 
 const WALL_COLOR: u32 = 0x3b82f6;
 const WALL_PLUS_COLOR: u32 = 0xef4444;
@@ -98,7 +99,13 @@ pub fn render_player(
     line(framebuffer, screen_x, screen_y, screen_end_x, screen_end_y);
 }
 
-pub fn render_3d(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, block_size: usize) {
+pub fn render_3d(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    player: &Player,
+    block_size: usize,
+    textures: &TextureManager,
+) {
     if framebuffer.width == 0 || framebuffer.height == 0 {
         return;
     }
@@ -130,13 +137,38 @@ pub fn render_3d(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, bl
         let corrected_distance = correct_fish_eye(intersection.distance, ray_angle, player.a);
         let stake_height =
             projected_stake_height(block_size as f32, corrected_distance, projection_plane);
-        let stake_top = (screen_center - stake_height / 2.0).max(0.0).round() as isize;
-        let stake_bottom = (screen_center + stake_height / 2.0)
+        let unclipped_stake_top = screen_center - stake_height / 2.0;
+        let unclipped_stake_bottom = screen_center + stake_height / 2.0;
+        let clipped_top = unclipped_stake_top.max(0.0).round() as isize;
+        let clipped_bottom = unclipped_stake_bottom
             .min((framebuffer.height - 1) as f32)
             .round() as isize;
+        let texture = textures.get(intersection.impact);
+        let tx = texture_x_from_hit(
+            intersection.hit_x,
+            intersection.hit_y,
+            intersection.side,
+            block_size,
+            texture.width,
+        );
 
-        framebuffer.set_current_color(wall_color(intersection.impact));
-        line(framebuffer, x as isize, stake_top, x as isize, stake_bottom);
+        line_with_shader(
+            framebuffer,
+            x as isize,
+            clipped_top,
+            x as isize,
+            clipped_bottom,
+            |_, pixel_y| {
+                let ty = texture_y_for_stake(
+                    pixel_y,
+                    unclipped_stake_top,
+                    unclipped_stake_bottom,
+                    texture.height,
+                );
+
+                texture.get_pixel(tx, ty)
+            },
+        );
     }
 }
 
@@ -420,6 +452,7 @@ fn projected_stake_height(wall_height: f32, distance_to_wall: f32, projection_pl
     (wall_height / distance_to_wall) * projection_plane
 }
 
+#[allow(dead_code)]
 fn wall_color(impact: char) -> u32 {
     match impact {
         '#' => WALL_COLOR,
@@ -649,7 +682,41 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::f32::consts::PI;
+
+    use crate::texture::Texture;
+
     use super::*;
+
+    fn solid_texture(color: u32) -> Texture {
+        Texture::new(2, 2, vec![color; 4]).expect("solid texture should be valid")
+    }
+
+    fn texture_manager_for_render_tests(
+        textures: impl IntoIterator<Item = (char, u32)>,
+    ) -> TextureManager {
+        let textures = textures
+            .into_iter()
+            .map(|(wall, color)| (wall, solid_texture(color)))
+            .collect::<HashMap<_, _>>();
+
+        TextureManager::new(textures, Texture::fallback())
+    }
+
+    fn render_test_maze() -> Maze {
+        vec![
+            "#####".chars().collect(),
+            "#   +".chars().collect(),
+            "# p +".chars().collect(),
+            "#   +".chars().collect(),
+            "#####".chars().collect(),
+        ]
+    }
+
+    fn framebuffer_contains(framebuffer: &Framebuffer, color: u32) -> bool {
+        framebuffer.buffer.contains(&color)
+    }
 
     #[test]
     fn projection_plane_is_positive_for_valid_fov() {
@@ -689,6 +756,55 @@ mod tests {
         assert_ne!(wall_color('%'), wall_color('@'));
         assert_ne!(wall_color('@'), wall_color('&'));
         assert_ne!(wall_color('&'), wall_color('!'));
+    }
+
+    #[test]
+    fn render_3d_draws_wall_pixels_from_texture() {
+        let maze = render_test_maze();
+        let mut player = Player::new(2, 2, 10);
+        player.a = 0.0;
+        let mut framebuffer = Framebuffer::new(80, 60);
+        let textures = texture_manager_for_render_tests([('+', 0x123456)]);
+
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+
+        assert!(framebuffer_contains(&framebuffer, 0x123456));
+    }
+
+    #[test]
+    fn render_3d_selects_texture_from_wall_impact() {
+        let maze = render_test_maze();
+        let textures = texture_manager_for_render_tests([('#', 0x111111), ('+', 0x222222)]);
+        let mut player = Player::new(2, 2, 10);
+        let mut framebuffer = Framebuffer::new(80, 60);
+
+        player.a = 0.0;
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+        assert!(framebuffer_contains(&framebuffer, 0x222222));
+
+        framebuffer.clear();
+        player.a = PI;
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+        assert!(framebuffer_contains(&framebuffer, 0x111111));
+    }
+
+    #[test]
+    fn render_3d_handles_clipped_near_wall_texture_sampling() {
+        let maze = vec![
+            "###".chars().collect(),
+            "#p#".chars().collect(),
+            "###".chars().collect(),
+        ];
+        let mut player = Player::new(1, 1, 10);
+        player.pos.x = 19.5;
+        player.pos.y = 15.0;
+        player.a = 0.0;
+        let mut framebuffer = Framebuffer::new(20, 20);
+        let textures = texture_manager_for_render_tests([('#', 0x334455)]);
+
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+
+        assert!(framebuffer_contains(&framebuffer, 0x334455));
     }
 
     #[test]

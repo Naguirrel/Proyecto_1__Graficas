@@ -235,7 +235,7 @@ fn rgb_to_u32(r: u8, g: u8, b: u8) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use crate::caster::cast_ray;
+    use crate::caster::{Intersect, cast_ray};
     use crate::framebuffer::Framebuffer;
     use crate::maze::Maze;
     use crate::player::Player;
@@ -437,6 +437,31 @@ mod tests {
         );
 
         assert!(tx < texture_width);
+    }
+
+    #[test]
+    fn texture_coordinates_sample_expected_pixel_from_intersection() {
+        let intersection = Intersect {
+            distance: 10.0,
+            impact: '#',
+            hit_x: 80.0,
+            hit_y: 10.0,
+            side: WallSide::Vertical,
+        };
+        let mut pixels = vec![0x000000; 32 * 32];
+        pixels[16 * 32 + 8] = 0xabcdef;
+        let texture = Texture::new(32, 32, pixels).expect("test texture should be valid");
+
+        let tx = texture_x_from_hit(
+            intersection.hit_x,
+            intersection.hit_y,
+            intersection.side,
+            40,
+            texture.width,
+        );
+        let ty = texture_y_for_stake(200, 100.0, 300.0, texture.height);
+
+        assert_eq!(texture.get_pixel(tx, ty), 0xabcdef);
     }
 
     #[test]
