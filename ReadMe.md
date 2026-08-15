@@ -16,6 +16,7 @@ jugador llega a la meta `g`.
 - Vista 3D estilo raycaster.
 - Raycasting con FOV.
 - Movimiento con delta time.
+- Contador de FPS visible durante gameplay.
 - Colisiones y wall sliding.
 - Fish-eye correction.
 - Salto.
