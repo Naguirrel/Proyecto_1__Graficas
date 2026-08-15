@@ -698,7 +698,7 @@ mod tests {
             .map(|line| line.chars().collect())
             .collect::<Maze>();
 
-        assert_eq!(minimap_dimensions(&maze), (114, 78));
+        assert_eq!(minimap_dimensions(&maze), (120, 84));
     }
 
     #[test]

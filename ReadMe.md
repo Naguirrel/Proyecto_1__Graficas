@@ -21,7 +21,8 @@ jugador llega a la meta `g`.
 - Colisiones y wall sliding.
 - Fish-eye correction.
 - Salto.
-- Cinco colores normales de pared sin colores repetidos en paredes adyacentes.
+- Sistema de carga de texturas en memoria preparado para el renderer 3D.
+- Cinco colores normales de pared.
 - Paredes amarillas reservadas solo para la meta.
 - Bresenham para rasterizacion de lineas, rayos y stakes.
 - Meta y condicion de victoria.
@@ -72,9 +73,37 @@ cargo test
 - `src/caster.rs`: logica de raycasting para rayos 2D e impactos de paredes 3D
 - `src/render.rs`: renderizado del mapa 2D, proyeccion 3D y asignacion de
   colores
+- `src/texture.rs`: carga de imagenes PNG, almacenamiento de texturas en
+  memoria y acceso individual a pixeles
 - `src/framebuffer.rs`: abstraccion del buffer de pixeles usado por el renderer
 - `src/line.rs`: helper para dibujar lineas
+- `assets/`: imagenes PNG que se cargan como texturas de pared
 - `maze.txt`: archivo editable con el laberinto
+
+## Texturas
+
+El sistema de carga de texturas esta implementado y sera utilizado por el
+renderer 3D en una etapa posterior. Las imagenes se decodifican desde PNG y se
+guardan en memoria como pixeles `u32` compatibles con el framebuffer.
+
+Estructura esperada:
+
+```text
+assets/
+├── wall1.png
+├── wall2.png
+├── wall3.png
+└── wall4.png
+```
+
+Mapeo preparado:
+
+```text
+# -> wall1.png
++ -> wall2.png
+% -> wall3.png
+@ -> wall4.png
+```
 
 ## Formato del Laberinto
 

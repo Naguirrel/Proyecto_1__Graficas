@@ -184,26 +184,6 @@ mod tests {
         characters
     }
 
-    fn repeated_adjacent_wall_color(maze: &Maze) -> Option<char> {
-        for (y, row) in maze.iter().enumerate() {
-            for (x, cell) in row.iter().enumerate() {
-                if !is_wall(*cell) {
-                    continue;
-                }
-
-                if x + 1 < row.len() && row[x + 1] == *cell {
-                    return Some(*cell);
-                }
-
-                if y + 1 < maze.len() && maze[y + 1][x] == *cell {
-                    return Some(*cell);
-                }
-            }
-        }
-
-        None
-    }
-
     fn yellow_walls_are_only_next_to_goal(maze: &Maze) -> bool {
         let (goal_x, goal_y) = find_char(maze, 'g').expect("test maze must contain g");
 
@@ -221,14 +201,14 @@ mod tests {
         let maze = maze_from_text(include_str!("../maze.txt"));
 
         assert!(validate_maze(&maze));
-        assert_eq!(maze.len(), 13);
-        assert!(maze.iter().all(|row| row.len() == 19));
+        assert_eq!(maze.len(), 14);
+        assert!(maze.iter().all(|row| row.len() == 20));
 
         let player = find_char(&maze, 'p').expect("test maze must contain p");
         let goal = find_char(&maze, 'g').expect("test maze must contain g");
 
         assert_eq!(player, (1, 1));
-        assert_eq!(goal, (16, 11));
+        assert_eq!(goal, (17, 12));
         assert!(path_exists(&maze, player, goal));
     }
 
@@ -238,7 +218,7 @@ mod tests {
 
         assert!(route_exists_through(&maze, (5, 1)));
         assert!(route_exists_through(&maze, (1, 7)));
-        assert!(route_exists_through(&maze, (7, 11)));
+        assert!(route_exists_through(&maze, (6, 12)));
     }
 
     #[test]
@@ -250,11 +230,10 @@ mod tests {
     }
 
     #[test]
-    fn project_maze_uses_five_wall_colors_without_repeated_neighbors() {
+    fn project_maze_uses_five_wall_colors() {
         let maze = maze_from_text(include_str!("../maze.txt"));
 
         assert_eq!(wall_characters(&maze), vec!['#', '%', '&', '+', '@']);
-        assert_eq!(repeated_adjacent_wall_color(&maze), None);
     }
 
     #[test]

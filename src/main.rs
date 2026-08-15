@@ -6,6 +6,7 @@ mod line;
 mod maze;
 mod player;
 mod render;
+pub mod texture;
 
 use caster::cast_fov_2d;
 use framebuffer::Framebuffer;
