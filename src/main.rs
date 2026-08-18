@@ -20,6 +20,7 @@ use render::{
     render_victory_screen,
 };
 use std::time::Instant;
+use texture::TextureManager;
 
 const WIDTH: usize = 800;
 const HEIGHT: usize = 600;
@@ -95,6 +96,8 @@ fn main() -> Result<(), minifb::Error> {
     println!("Player angle: {:.4} rad", player.a);
     println!("Player FOV: {:.4} rad", player.fov);
 
+    let textures = TextureManager::load_default();
+
     let mut window = Window::new(
         "Proyecto 1 - Raycasting",
         WIDTH,
@@ -163,7 +166,7 @@ fn main() -> Result<(), minifb::Error> {
                     render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
                 }
                 RenderMode::Mode3D => {
-                    render_3d(&mut framebuffer, &maze, &player, BLOCK_SIZE);
+                    render_3d(&mut framebuffer, &maze, &player, BLOCK_SIZE, &textures);
                     render_minimap(&mut framebuffer, &maze, &player, BLOCK_SIZE);
                 }
             },
