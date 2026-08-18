@@ -108,7 +108,7 @@ fn main() -> Result<(), minifb::Error> {
     let mut framebuffer = Framebuffer::new(WIDTH, HEIGHT);
     let (maze_offset_x, maze_offset_y) = maze_offset(&framebuffer, &maze, BLOCK_SIZE);
     let mut last_time = Instant::now();
-    let mut render_mode = RenderMode::Mode2D;
+    let mut render_mode = RenderMode::Mode3D;
     let mut game_state = GameState::Welcome;
     let mut fps_counter = FpsCounter::new();
     let mut mouse_look = MouseLook::new();
