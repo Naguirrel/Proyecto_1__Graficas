@@ -32,7 +32,7 @@ pub struct GamepadSnapshot {
 
 impl GamepadSnapshot {
     pub fn movement_axis(&self) -> f32 {
-        let stick = apply_deadzone(-self.left_stick_y, STICK_DEADZONE);
+        let stick = apply_deadzone(self.left_stick_y, STICK_DEADZONE);
         let digital = digital_axis(self.buttons.dpad_up, self.buttons.dpad_down);
 
         strongest_axis(stick, digital)
@@ -241,9 +241,9 @@ mod tests {
     }
 
     #[test]
-    fn movement_axis_inverts_left_stick_y_for_forward_motion() {
+    fn movement_axis_uses_left_stick_up_for_forward_motion() {
         let snapshot = GamepadSnapshot {
-            left_stick_y: -0.8,
+            left_stick_y: 0.8,
             ..GamepadSnapshot::default()
         };
 
