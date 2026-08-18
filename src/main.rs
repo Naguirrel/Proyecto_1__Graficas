@@ -17,7 +17,7 @@ use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
 use render::{
     maze_offset, render_3d, render_fps_overlay, render_maze, render_minimap, render_player,
-    render_victory_screen,
+    render_victory_screen, render_welcome_screen,
 };
 use std::time::Instant;
 use texture::TextureManager;
@@ -109,7 +109,7 @@ fn main() -> Result<(), minifb::Error> {
     let (maze_offset_x, maze_offset_y) = maze_offset(&framebuffer, &maze, BLOCK_SIZE);
     let mut last_time = Instant::now();
     let mut render_mode = RenderMode::Mode2D;
-    let mut game_state = GameState::Playing;
+    let mut game_state = GameState::Welcome;
     let mut fps_counter = FpsCounter::new();
     let mut mouse_look = MouseLook::new();
 
@@ -123,6 +123,14 @@ fn main() -> Result<(), minifb::Error> {
         fps_counter.update(delta_time);
 
         match game_state {
+            GameState::Welcome => {
+                if window.is_key_pressed(Key::Enter, KeyRepeat::No) {
+                    reset_player(&mut player, player_start, BLOCK_SIZE);
+                    game_state = GameState::Playing;
+                }
+
+                mouse_look.reset();
+            }
             GameState::Playing => {
                 process_input(
                     &window,
@@ -152,6 +160,9 @@ fn main() -> Result<(), minifb::Error> {
         framebuffer.clear();
 
         match game_state {
+            GameState::Welcome => {
+                render_welcome_screen(&mut framebuffer, &maze);
+            }
             GameState::Playing => match render_mode {
                 RenderMode::Mode2D => {
                     render_maze(&mut framebuffer, &maze, BLOCK_SIZE);
@@ -171,7 +182,7 @@ fn main() -> Result<(), minifb::Error> {
                 }
             },
             GameState::Won => {
-                render_victory_screen(&mut framebuffer);
+                render_victory_screen(&mut framebuffer, &maze);
             }
         }
 
