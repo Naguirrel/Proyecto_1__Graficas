@@ -104,11 +104,21 @@ fn has_wall_borders(maze: &Maze) -> bool {
 #[cfg(test)]
 mod tests {
     use std::collections::VecDeque;
+    use std::path::Path;
 
     use super::*;
 
+    const PROJECT_MAZE_PATHS: [&str; 3] = ["maze.txt", "maze_2.txt", "maze_3.txt"];
+
     fn maze_from_text(text: &str) -> Maze {
         text.lines().map(|line| line.chars().collect()).collect()
+    }
+
+    fn load_project_maze(path: &str) -> Maze {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
+        let text = std::fs::read_to_string(path).expect("project maze file should be readable");
+
+        maze_from_text(&text)
     }
 
     fn path_exists(maze: &Maze, start: (usize, usize), goal: (usize, usize)) -> bool {
@@ -242,6 +252,48 @@ mod tests {
         assert_eq!(player, (1, 1));
         assert_eq!(goal, (17, 12));
         assert!(path_exists(&maze, player, goal));
+    }
+
+    #[test]
+    fn project_level_files_are_valid_and_connect_player_to_goal() {
+        for path in PROJECT_MAZE_PATHS {
+            let maze = load_project_maze(path);
+
+            assert!(validate_maze(&maze), "{path} should be a valid maze");
+            assert_eq!(maze.len(), 14, "{path} should keep the project height");
+            assert!(
+                maze.iter().all(|row| row.len() == 20),
+                "{path} should keep the project width"
+            );
+
+            let player = find_char(&maze, 'p').expect("test maze must contain p");
+            let goal = find_char(&maze, 'g').expect("test maze must contain g");
+
+            assert!(
+                path_exists(&maze, player, goal),
+                "{path} should connect the player start to the goal"
+            );
+        }
+    }
+
+    #[test]
+    fn project_level_files_follow_wall_texture_rules() {
+        for path in PROJECT_MAZE_PATHS {
+            let maze = load_project_maze(path);
+
+            assert!(
+                goal_has_marked_wall(&maze),
+                "{path} should mark a wall next to the goal"
+            );
+            assert!(
+                marked_walls_are_only_around_goal(&maze),
+                "{path} should reserve ! walls for the goal area"
+            );
+            assert!(
+                normal_wall_symbols_do_not_repeat_consecutively(&maze),
+                "{path} should avoid repeated adjacent wall symbols"
+            );
+        }
     }
 
     #[test]

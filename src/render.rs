@@ -174,15 +174,24 @@ pub fn render_3d(
     }
 }
 
-pub fn render_welcome_screen(framebuffer: &mut Framebuffer, maze: &Maze) {
+pub fn render_welcome_screen(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    selected_level_index: usize,
+    level_count: usize,
+) {
+    let level_text = format!("NIVEL {} DE {}", selected_level_index + 1, level_count);
+
     render_menu_screen(
         framebuffer,
         maze,
         "RAYCASTING",
+        Some(&level_text),
         "ENTER INICIAR",
-        "ESC SALIR",
+        "A D NIVEL",
         VICTORY_ACCENT_COLOR,
     );
+    draw_text_centered(framebuffer, "ESC SALIR", 430, 5, VICTORY_TEXT_COLOR);
 }
 
 pub fn render_victory_screen(framebuffer: &mut Framebuffer, maze: &Maze) {
@@ -190,6 +199,7 @@ pub fn render_victory_screen(framebuffer: &mut Framebuffer, maze: &Maze) {
         framebuffer,
         maze,
         "GANASTE",
+        None,
         "R REINICIAR",
         "ESC SALIR",
         VICTORY_ACCENT_COLOR,
@@ -200,6 +210,7 @@ fn render_menu_screen(
     framebuffer: &mut Framebuffer,
     maze: &Maze,
     title: &str,
+    detail: Option<&str>,
     primary_action: &str,
     secondary_action: &str,
     accent_color: u32,
@@ -240,6 +251,9 @@ fn render_menu_screen(
     );
 
     draw_text_centered(framebuffer, title, 135, 8, VICTORY_TEXT_COLOR);
+    if let Some(detail) = detail {
+        draw_text_centered(framebuffer, detail, 255, 5, VICTORY_TEXT_COLOR);
+    }
     draw_text_centered(framebuffer, primary_action, 315, 5, accent_color);
     draw_text_centered(framebuffer, secondary_action, 380, 5, VICTORY_TEXT_COLOR);
 }
@@ -722,6 +736,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         'C' => Some([
             0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111,
         ]),
+        'D' => Some([
+            0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110,
+        ]),
         'E' => Some([
             0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111,
         ]),
@@ -751,6 +768,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         ]),
         'T' => Some([
             0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+        ]),
+        'V' => Some([
+            0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100,
         ]),
         'Y' => Some([
             0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100,
@@ -958,13 +978,14 @@ mod tests {
         let maze = render_test_maze();
         let mut framebuffer = Framebuffer::new(800, 600);
 
-        render_welcome_screen(&mut framebuffer, &maze);
+        render_welcome_screen(&mut framebuffer, &maze, 1, 3);
 
         assert!(framebuffer_contains(&framebuffer, VICTORY_TEXT_COLOR));
         assert!(framebuffer_contains(
             &framebuffer,
             scale_color(wall_color('#'), 2, 3)
         ));
+        assert!(glyph('V').is_some());
         assert!(glyph('Y').is_some());
     }
 
@@ -974,7 +995,7 @@ mod tests {
         let mut welcome = Framebuffer::new(800, 600);
         let mut victory = Framebuffer::new(800, 600);
 
-        render_welcome_screen(&mut welcome, &maze);
+        render_welcome_screen(&mut welcome, &maze, 0, 3);
         render_victory_screen(&mut victory, &maze);
 
         assert_eq!(welcome.buffer[0], victory.buffer[0]);

@@ -1,8 +1,8 @@
 # Proyecto 1 - Raycasting
 
-Proyecto universitario de Graficas por Computadora. El juego carga un laberinto
-desde `maze.txt`, permite recorrerlo en vista 2D o 3D, y termina cuando el
-jugador llega a la meta `g`.
+Proyecto universitario de Graficas por Computadora. El juego carga laberintos
+desde archivos `.txt`, permite escoger entre tres niveles, recorrerlos en vista
+2D o 3D, y termina cuando el jugador llega a la meta `g`.
 
 ## Tecnologia
 
@@ -12,6 +12,8 @@ jugador llega a la meta `g`.
 ## Funcionalidades
 
 - Maze cargado desde archivo.
+- Tres niveles cargados desde archivos `.txt`.
+- Selector de nivel en la pantalla de bienvenida.
 - Vista 2D de depuracion.
 - Vista 3D estilo raycaster.
 - Pantalla de bienvenida con estetica del nivel.
@@ -41,6 +43,9 @@ cargo run
 Antes de iniciar:
 
 ```text
+A / D   Cambiar nivel
+Left / Right
+        Cambiar nivel
 ENTER   Iniciar
 ESC     Salir
 ```
@@ -88,7 +93,23 @@ cargo test
 - `src/framebuffer.rs`: abstraccion del buffer de pixeles usado por el renderer
 - `src/line.rs`: helper para dibujar lineas
 - `assets/`: imagenes PNG que se cargan como texturas de pared
-- `maze.txt`: archivo editable con el laberinto
+- `maze.txt`: primer nivel editable
+- `maze_2.txt`: segundo nivel editable
+- `maze_3.txt`: tercer nivel editable
+
+## Niveles
+
+El juego carga estos archivos al iniciar:
+
+```text
+maze.txt
+maze_2.txt
+maze_3.txt
+```
+
+En la pantalla de bienvenida se puede cambiar el nivel seleccionado con `A`/`D`
+o con las flechas izquierda/derecha. Al presionar `ENTER`, el jugador inicia en
+el `p` del nivel seleccionado.
 
 ## Texturas
 
@@ -123,7 +144,7 @@ Mapeo preparado:
 
 ## Formato del Laberinto
 
-El laberinto es un archivo de texto rectangular. Debe contener exactamente un
+Cada laberinto es un archivo de texto rectangular. Debe contener exactamente un
 inicio del jugador (`p`) y una meta (`g`). El borde exterior debe estar formado
 por paredes.
 
