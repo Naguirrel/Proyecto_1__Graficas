@@ -3,6 +3,7 @@ use crate::player::Player;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameState {
+    Welcome,
     Playing,
     Won,
 }

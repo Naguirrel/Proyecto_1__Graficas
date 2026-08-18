@@ -14,6 +14,7 @@ jugador llega a la meta `g`.
 - Maze cargado desde archivo.
 - Vista 2D de depuracion.
 - Vista 3D estilo raycaster.
+- Pantalla de bienvenida con estetica del nivel.
 - Minimapa en la esquina durante la vista 3D.
 - Raycasting con FOV.
 - Movimiento con delta time.
@@ -27,6 +28,7 @@ jugador llega a la meta `g`.
 - Mapa sin repetir el mismo simbolo de muro en celdas consecutivas.
 - Bresenham para rasterizacion de lineas, rayos y stakes.
 - Meta y condicion de victoria.
+- Pantalla de exito.
 
 ## Ejecutar
 
@@ -35,6 +37,13 @@ cargo run
 ```
 
 ## Controles
+
+Antes de iniciar:
+
+```text
+ENTER   Iniciar
+ESC     Salir
+```
 
 Durante el juego:
 

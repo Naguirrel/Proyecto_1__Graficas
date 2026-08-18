@@ -22,6 +22,8 @@ const VICTORY_BACKGROUND_COLOR: u32 = 0x052e2b;
 const VICTORY_ACCENT_COLOR: u32 = 0xfacc15;
 const VICTORY_TEXT_COLOR: u32 = 0xfff7ed;
 const VICTORY_SHADOW_COLOR: u32 = 0x0f172a;
+const MENU_MAZE_CELL_SIZE: usize = 10;
+const MENU_MAZE_BOTTOM_MARGIN: usize = 30;
 const FPS_OVERLAY_BACKGROUND_COLOR: u32 = 0x111111;
 const FPS_OVERLAY_TEXT_COLOR: u32 = 0xfff7ed;
 const FPS_OVERLAY_X: isize = 10;
@@ -172,11 +174,42 @@ pub fn render_3d(
     }
 }
 
-pub fn render_victory_screen(framebuffer: &mut Framebuffer) {
+pub fn render_welcome_screen(framebuffer: &mut Framebuffer, maze: &Maze) {
+    render_menu_screen(
+        framebuffer,
+        maze,
+        "RAYCASTING",
+        "ENTER INICIAR",
+        "ESC SALIR",
+        VICTORY_ACCENT_COLOR,
+    );
+}
+
+pub fn render_victory_screen(framebuffer: &mut Framebuffer, maze: &Maze) {
+    render_menu_screen(
+        framebuffer,
+        maze,
+        "GANASTE",
+        "R REINICIAR",
+        "ESC SALIR",
+        VICTORY_ACCENT_COLOR,
+    );
+}
+
+fn render_menu_screen(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    title: &str,
+    primary_action: &str,
+    secondary_action: &str,
+    accent_color: u32,
+) {
     fill_screen(framebuffer, VICTORY_BACKGROUND_COLOR);
+    draw_menu_wall_bands(framebuffer);
+    draw_menu_maze_motif(framebuffer, maze);
 
     let margin = 24;
-    framebuffer.set_current_color(VICTORY_ACCENT_COLOR);
+    framebuffer.set_current_color(accent_color);
     line(
         framebuffer,
         margin,
@@ -206,9 +239,9 @@ pub fn render_victory_screen(framebuffer: &mut Framebuffer) {
         framebuffer.height as isize - margin,
     );
 
-    draw_text_centered(framebuffer, "GANASTE", 150, 12, VICTORY_TEXT_COLOR);
-    draw_text_centered(framebuffer, "R REINICIAR", 330, 5, VICTORY_ACCENT_COLOR);
-    draw_text_centered(framebuffer, "ESC SALIR", 390, 5, VICTORY_TEXT_COLOR);
+    draw_text_centered(framebuffer, title, 135, 8, VICTORY_TEXT_COLOR);
+    draw_text_centered(framebuffer, primary_action, 315, 5, accent_color);
+    draw_text_centered(framebuffer, secondary_action, 380, 5, VICTORY_TEXT_COLOR);
 }
 
 pub fn render_fps_overlay(framebuffer: &mut Framebuffer, fps: u32) {
@@ -452,7 +485,71 @@ fn projected_stake_height(wall_height: f32, distance_to_wall: f32, projection_pl
     (wall_height / distance_to_wall) * projection_plane
 }
 
-#[allow(dead_code)]
+fn draw_menu_wall_bands(framebuffer: &mut Framebuffer) {
+    let walls = ['#', '+', '%', '@', '&', '!'];
+
+    if framebuffer.width == 0 || framebuffer.height == 0 {
+        return;
+    }
+
+    let band_width = (framebuffer.width as isize / walls.len() as isize).max(1);
+    let top_y = 68;
+    let bottom_y = framebuffer.height as isize - 76;
+
+    for (index, wall) in walls.iter().enumerate() {
+        let x = index as isize * band_width;
+        let color = scale_color(wall_color(*wall), 1, 2);
+
+        fill_rect(framebuffer, x, top_y, band_width, 8, color);
+        fill_rect(framebuffer, x, bottom_y, band_width, 8, color);
+    }
+}
+
+fn draw_menu_maze_motif(framebuffer: &mut Framebuffer, maze: &Maze) {
+    if maze.is_empty() || framebuffer.width == 0 || framebuffer.height == 0 {
+        return;
+    }
+
+    let maze_width = maze.iter().map(|row| row.len()).max().unwrap_or(0);
+    let maze_height = maze.len();
+
+    if maze_width == 0 || maze_height == 0 {
+        return;
+    }
+
+    let cell_size = MENU_MAZE_CELL_SIZE
+        .min((framebuffer.width / maze_width).max(1))
+        .min((framebuffer.height / maze_height).max(1));
+    let motif_width = maze_width * cell_size;
+    let motif_height = maze_height * cell_size;
+    let offset_x = framebuffer.width.saturating_sub(motif_width) / 2;
+    let offset_y = framebuffer
+        .height
+        .saturating_sub(motif_height + MENU_MAZE_BOTTOM_MARGIN);
+
+    for (row_index, row) in maze.iter().enumerate() {
+        for (column_index, cell) in row.iter().enumerate() {
+            let color = match *cell {
+                '#' | '+' | '%' | '@' | '&' | '!' => scale_color(wall_color(*cell), 2, 3),
+                'g' => GOAL_COLOR,
+                'p' => PLAYER_COLOR,
+                ' ' => scale_color(PATH_COLOR, 1, 5),
+                _ => UNKNOWN_COLOR,
+            };
+            let visible_size = cell_size.saturating_sub(1).max(1);
+
+            fill_rect(
+                framebuffer,
+                (offset_x + column_index * cell_size) as isize,
+                (offset_y + row_index * cell_size) as isize,
+                visible_size as isize,
+                visible_size as isize,
+                color,
+            );
+        }
+    }
+}
+
 fn wall_color(impact: char) -> u32 {
     match impact {
         '#' => WALL_COLOR,
@@ -463,6 +560,18 @@ fn wall_color(impact: char) -> u32 {
         '!' => GOAL_WALL_COLOR,
         _ => UNKNOWN_COLOR,
     }
+}
+
+fn scale_color(color: u32, numerator: u32, denominator: u32) -> u32 {
+    if denominator == 0 {
+        return color;
+    }
+
+    let red = ((color >> 16) & 0xff) * numerator / denominator;
+    let green = ((color >> 8) & 0xff) * numerator / denominator;
+    let blue = (color & 0xff) * numerator / denominator;
+
+    (red << 16) | (green << 8) | blue
 }
 
 fn fill_screen(framebuffer: &mut Framebuffer, color: u32) {
@@ -642,6 +751,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         ]),
         'T' => Some([
             0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+        ]),
+        'Y' => Some([
+            0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100,
         ]),
         '0' => Some([
             0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110,
@@ -839,5 +951,33 @@ mod tests {
             minimap_player_position(&player, 40, 672, 14),
             Some((681, 23))
         );
+    }
+
+    #[test]
+    fn welcome_screen_draws_title_and_level_motif() {
+        let maze = render_test_maze();
+        let mut framebuffer = Framebuffer::new(800, 600);
+
+        render_welcome_screen(&mut framebuffer, &maze);
+
+        assert!(framebuffer_contains(&framebuffer, VICTORY_TEXT_COLOR));
+        assert!(framebuffer_contains(
+            &framebuffer,
+            scale_color(wall_color('#'), 2, 3)
+        ));
+        assert!(glyph('Y').is_some());
+    }
+
+    #[test]
+    fn victory_screen_uses_same_menu_background_as_welcome() {
+        let maze = render_test_maze();
+        let mut welcome = Framebuffer::new(800, 600);
+        let mut victory = Framebuffer::new(800, 600);
+
+        render_welcome_screen(&mut welcome, &maze);
+        render_victory_screen(&mut victory, &maze);
+
+        assert_eq!(welcome.buffer[0], victory.buffer[0]);
+        assert!(framebuffer_contains(&victory, VICTORY_ACCENT_COLOR));
     }
 }
