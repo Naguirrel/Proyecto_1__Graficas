@@ -5,11 +5,13 @@ use std::path::Path;
 
 use crate::caster::WallSide;
 
-const DEFAULT_TEXTURE_PATHS: [(char, &str); 4] = [
+const DEFAULT_TEXTURE_PATHS: [(char, &str); 6] = [
     ('#', "assets/wall1.png"),
     ('+', "assets/wall2.png"),
     ('%', "assets/wall3.png"),
     ('@', "assets/wall4.png"),
+    ('&', "assets/wall5.png"),
+    ('!', "assets/wall5.png"),
 ];
 
 const FALLBACK_MAGENTA: u32 = 0xff00ff;
@@ -253,6 +255,8 @@ mod tests {
         textures.insert('+', Texture::new(1, 1, vec![0x222222]).unwrap());
         textures.insert('%', Texture::new(1, 1, vec![0x333333]).unwrap());
         textures.insert('@', Texture::new(1, 1, vec![0x444444]).unwrap());
+        textures.insert('&', Texture::new(1, 1, vec![0x555555]).unwrap());
+        textures.insert('!', Texture::new(1, 1, vec![0x666666]).unwrap());
 
         TextureManager::new(textures, Texture::fallback())
     }
@@ -330,6 +334,24 @@ mod tests {
     }
 
     #[test]
+    fn loads_goal_png_from_assets() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/wall5.png");
+        let texture = Texture::from_file(path).expect("wall5.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+    }
+
+    #[test]
+    fn default_manager_maps_goal_wall_texture() {
+        let manager = TextureManager::load_default();
+
+        assert!(!std::ptr::eq(manager.get('!'), &manager.fallback));
+        assert!(!std::ptr::eq(manager.get('&'), &manager.fallback));
+    }
+
+    #[test]
     fn texture_manager_maps_known_wall_characters() {
         let manager = texture_manager_for_tests();
 
@@ -337,14 +359,16 @@ mod tests {
         assert_eq!(manager.get('+').get_pixel(0, 0), 0x222222);
         assert_eq!(manager.get('%').get_pixel(0, 0), 0x333333);
         assert_eq!(manager.get('@').get_pixel(0, 0), 0x444444);
+        assert_eq!(manager.get('&').get_pixel(0, 0), 0x555555);
+        assert_eq!(manager.get('!').get_pixel(0, 0), 0x666666);
     }
 
     #[test]
     fn texture_manager_returns_fallback_for_unknown_wall_character() {
         let manager = texture_manager_for_tests();
 
-        assert!(std::ptr::eq(manager.get('&'), &manager.fallback));
-        assert_eq!(manager.get('&').get_pixel(0, 0), FALLBACK_MAGENTA);
+        assert!(std::ptr::eq(manager.get('~'), &manager.fallback));
+        assert_eq!(manager.get('~').get_pixel(0, 0), FALLBACK_MAGENTA);
     }
 
     #[test]

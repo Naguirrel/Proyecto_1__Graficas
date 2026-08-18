@@ -22,8 +22,9 @@ jugador llega a la meta `g`.
 - Fish-eye correction.
 - Salto.
 - Sistema de carga de texturas en memoria preparado para el renderer 3D.
-- Cinco colores normales de pared.
-- Paredes amarillas reservadas solo para la meta.
+- Cuatro texturas normales de pared.
+- Textura morada/negra reservada para las paredes de la meta.
+- Mapa sin repetir el mismo simbolo de muro en celdas consecutivas.
 - Bresenham para rasterizacion de lineas, rayos y stakes.
 - Meta y condicion de victoria.
 
@@ -96,7 +97,8 @@ assets/
 ├── wall1.png
 ├── wall2.png
 ├── wall3.png
-└── wall4.png
+├── wall4.png
+└── wall5.png
 ```
 
 Mapeo preparado:
@@ -106,6 +108,8 @@ Mapeo preparado:
 + -> wall2.png
 % -> wall3.png
 @ -> wall4.png
+& -> wall5.png
+! -> wall5.png
 ```
 
 ## Formato del Laberinto
@@ -116,8 +120,8 @@ por paredes.
 
 Caracteres reconocidos:
 
-- `#`, `+`, `%`, `@`, `&`: paredes con cinco colores diferentes
-- `!`: paredes amarillas reservadas para la meta
+- `#`, `+`, `%`, `@`: paredes normales con texturas diferentes
+- `!`: paredes moradas/negras reservadas para la meta
 - espacio: piso transitable
 - `p`: inicio del jugador
 - `g`: meta
