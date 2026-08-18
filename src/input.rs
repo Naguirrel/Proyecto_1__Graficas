@@ -2,6 +2,7 @@ use std::f32::consts::PI;
 
 use minifb::{Key, KeyRepeat, MouseMode, Window};
 
+use crate::gamepad::GamepadSnapshot;
 use crate::maze::{Maze, is_walkable};
 use crate::player::Player;
 
@@ -33,23 +34,17 @@ pub fn process_input(
     maze: &Maze,
     block_size: usize,
     delta_time: f32,
+    gamepad: &GamepadSnapshot,
 ) {
     let dir_x = player.a.cos();
     let dir_y = player.a.sin();
     let movement = MOVEMENT_SPEED * delta_time;
     let rotation = ROTATION_SPEED * delta_time;
 
-    let mut move_direction = 0.0;
-
-    if window.is_key_down(Key::W) {
-        move_direction += 1.0;
-    }
-
-    if window.is_key_down(Key::S) {
-        move_direction -= 1.0;
-    }
+    let move_direction = keyboard_movement_axis(window) + gamepad.movement_axis();
 
     if move_direction != 0.0 {
+        let move_direction = move_direction.clamp(-1.0, 1.0);
         let candidate_x = player.pos.x + dir_x * movement * move_direction;
         let candidate_y = player.pos.y + dir_y * movement * move_direction;
 
@@ -62,23 +57,48 @@ pub fn process_input(
         }
     }
 
-    if window.is_key_down(Key::A) {
-        player.a -= rotation;
-    }
-
-    if window.is_key_down(Key::D) {
-        player.a += rotation;
+    let rotation_direction = keyboard_rotation_axis(window) + gamepad.rotation_axis();
+    if rotation_direction != 0.0 {
+        player.a += rotation * rotation_direction.clamp(-1.0, 1.0);
     }
 
     process_mouse_look(window, player, mouse_look);
 
     player.a = player.a.rem_euclid(2.0 * PI);
 
-    if window.is_key_pressed(Key::Space, KeyRepeat::No) {
+    if window.is_key_pressed(Key::Space, KeyRepeat::No) || gamepad.jump_pressed() {
         player.start_jump(JUMP_SPEED);
     }
 
     player.update_vertical_motion(delta_time, GRAVITY);
+}
+
+fn keyboard_movement_axis(window: &Window) -> f32 {
+    let mut move_direction = 0.0;
+
+    if window.is_key_down(Key::W) {
+        move_direction += 1.0;
+    }
+
+    if window.is_key_down(Key::S) {
+        move_direction -= 1.0;
+    }
+
+    move_direction
+}
+
+fn keyboard_rotation_axis(window: &Window) -> f32 {
+    let mut rotation_direction = 0.0;
+
+    if window.is_key_down(Key::A) {
+        rotation_direction -= 1.0;
+    }
+
+    if window.is_key_down(Key::D) {
+        rotation_direction += 1.0;
+    }
+
+    rotation_direction
 }
 
 fn process_mouse_look(window: &Window, player: &mut Player, mouse_look: &mut MouseLook) {
