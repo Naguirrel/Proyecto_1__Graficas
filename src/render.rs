@@ -268,22 +268,14 @@ pub fn render_pause_menu(
 ) {
     let level_text = format!("NIVEL {} DE {}", selected_level_index + 1, level_count);
 
-    render_menu_screen_with_motif(
-        framebuffer,
-        maze,
-        "PAUSA",
-        Some(&level_text),
-        "",
-        "",
-        VICTORY_ACCENT_COLOR,
-        7,
-        20,
-    );
+    render_menu_frame(framebuffer, maze, VICTORY_ACCENT_COLOR, 7, 20);
+    draw_text_centered(framebuffer, "PAUSA", 135, 8, VICTORY_TEXT_COLOR);
+    draw_text_centered(framebuffer, &level_text, 235, 5, VICTORY_TEXT_COLOR);
     draw_menu_options(
         framebuffer,
         &["CONTINUAR", "CAMBIAR NIVEL", "MENU PRINCIPAL"],
         selected_option_index,
-        290,
+        320,
         4,
     );
 }
