@@ -11,8 +11,8 @@ pub mod texture;
 use caster::cast_fov_2d;
 use framebuffer::Framebuffer;
 use game::{GameState, player_reached_goal, reset_player};
-use input::{MouseLook, process_input};
-use maze::{find_char, load_maze, validate_maze};
+use input::{ControllerInput, MouseLook, process_input};
+use maze::{Maze, find_char, load_maze, validate_maze};
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
 use render::{
@@ -26,6 +26,35 @@ const WIDTH: usize = 800;
 const HEIGHT: usize = 600;
 const BLOCK_SIZE: usize = 40;
 const FPS_UPDATE_INTERVAL: f32 = 0.5;
+const LEVEL_PATHS: [&str; 3] = ["maze.txt", "maze_2.txt", "maze_3.txt"];
+
+struct Level {
+    maze: Maze,
+    player_start: (usize, usize),
+}
+
+impl Level {
+    fn load(path: &str) -> Self {
+        let maze = load_maze(path);
+
+        if !validate_maze(&maze) {
+            panic!(
+                "Invalid maze: {path} must be rectangular, bordered by walls, and contain exactly one p and one g"
+            );
+        }
+
+        let maze_width = maze[0].len();
+        let maze_height = maze.len();
+        let player_start = find_char(&maze, 'p').expect("Maze does not contain player start");
+        let goal = find_char(&maze, 'g').expect("Maze does not contain goal");
+
+        println!("Level loaded from {path}: {maze_width}x{maze_height}");
+        println!("Player start: ({}, {})", player_start.0, player_start.1);
+        println!("Goal: ({}, {})", goal.0, goal.1);
+
+        Self { maze, player_start }
+    }
+}
 
 struct FpsCounter {
     frame_count: u32,
@@ -73,22 +102,35 @@ impl RenderMode {
     }
 }
 
-fn main() -> Result<(), minifb::Error> {
-    let maze = load_maze("maze.txt");
+fn load_levels(paths: &[&str]) -> Vec<Level> {
+    paths.iter().map(|path| Level::load(path)).collect()
+}
 
-    if !validate_maze(&maze) {
-        panic!("Invalid maze: maze.txt must be rectangular and contain exactly one p and one g");
+fn next_level_index(current: usize, level_count: usize) -> usize {
+    if level_count == 0 {
+        0
+    } else {
+        (current + 1) % level_count
     }
+}
 
-    let maze_width = maze[0].len();
-    let maze_height = maze.len();
-    let player_start = find_char(&maze, 'p').expect("Maze does not contain player start");
-    let goal = find_char(&maze, 'g').expect("Maze does not contain goal");
-    let mut player = Player::new(player_start.0, player_start.1, BLOCK_SIZE);
+fn previous_level_index(current: usize, level_count: usize) -> usize {
+    if level_count == 0 {
+        0
+    } else {
+        (current + level_count - 1) % level_count
+    }
+}
 
-    println!("Maze loaded: {}x{}", maze_width, maze_height);
-    println!("Player start: ({}, {})", player_start.0, player_start.1);
-    println!("Goal: ({}, {})", goal.0, goal.1);
+fn main() -> Result<(), minifb::Error> {
+    let levels = load_levels(&LEVEL_PATHS);
+    let mut selected_level_index = 0;
+    let mut player = Player::new(
+        levels[selected_level_index].player_start.0,
+        levels[selected_level_index].player_start.1,
+        BLOCK_SIZE,
+    );
+
     println!(
         "Player world position: ({:.1}, {:.1})",
         player.pos.x, player.pos.y
@@ -106,12 +148,12 @@ fn main() -> Result<(), minifb::Error> {
     )?;
 
     let mut framebuffer = Framebuffer::new(WIDTH, HEIGHT);
-    let (maze_offset_x, maze_offset_y) = maze_offset(&framebuffer, &maze, BLOCK_SIZE);
     let mut last_time = Instant::now();
     let mut render_mode = RenderMode::Mode3D;
     let mut game_state = GameState::Welcome;
     let mut fps_counter = FpsCounter::new();
     let mut mouse_look = MouseLook::new();
+    let mut controller = ControllerInput::new();
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let current_time = Instant::now();
@@ -121,35 +163,74 @@ fn main() -> Result<(), minifb::Error> {
             .min(0.1);
         last_time = current_time;
         fps_counter.update(delta_time);
+        controller.update();
 
         match game_state {
             GameState::Welcome => {
-                if window.is_key_pressed(Key::Enter, KeyRepeat::No) {
-                    reset_player(&mut player, player_start, BLOCK_SIZE);
+                let previous_level = selected_level_index;
+
+                if window.is_key_pressed(Key::A, KeyRepeat::No)
+                    || window.is_key_pressed(Key::Left, KeyRepeat::No)
+                    || controller.menu_left_pressed()
+                {
+                    selected_level_index = previous_level_index(selected_level_index, levels.len());
+                }
+
+                if window.is_key_pressed(Key::D, KeyRepeat::No)
+                    || window.is_key_pressed(Key::Right, KeyRepeat::No)
+                    || controller.menu_right_pressed()
+                {
+                    selected_level_index = next_level_index(selected_level_index, levels.len());
+                }
+
+                if selected_level_index != previous_level {
+                    reset_player(
+                        &mut player,
+                        levels[selected_level_index].player_start,
+                        BLOCK_SIZE,
+                    );
+                    render_mode = RenderMode::Mode3D;
+                }
+
+                if window.is_key_pressed(Key::Enter, KeyRepeat::No) || controller.start_pressed() {
+                    reset_player(
+                        &mut player,
+                        levels[selected_level_index].player_start,
+                        BLOCK_SIZE,
+                    );
                     game_state = GameState::Playing;
                 }
 
                 mouse_look.reset();
             }
             GameState::Playing => {
+                let current_level = &levels[selected_level_index];
+
                 process_input(
                     &window,
                     &mut player,
                     &mut mouse_look,
-                    &maze,
+                    &controller,
+                    &current_level.maze,
                     BLOCK_SIZE,
                     delta_time,
                 );
 
-                if player_reached_goal(&maze, &player, BLOCK_SIZE) {
+                if player_reached_goal(&current_level.maze, &player, BLOCK_SIZE) {
                     game_state = GameState::Won;
-                } else if window.is_key_pressed(Key::Tab, KeyRepeat::No) {
+                } else if window.is_key_pressed(Key::Tab, KeyRepeat::No)
+                    || controller.select_pressed()
+                {
                     render_mode = render_mode.toggle();
                 }
             }
             GameState::Won => {
-                if window.is_key_pressed(Key::R, KeyRepeat::No) {
-                    reset_player(&mut player, player_start, BLOCK_SIZE);
+                if window.is_key_pressed(Key::R, KeyRepeat::No) || controller.start_pressed() {
+                    reset_player(
+                        &mut player,
+                        levels[selected_level_index].player_start,
+                        BLOCK_SIZE,
+                    );
                     game_state = GameState::Playing;
                 }
 
@@ -158,17 +239,26 @@ fn main() -> Result<(), minifb::Error> {
         }
 
         framebuffer.clear();
+        let current_level = &levels[selected_level_index];
 
         match game_state {
             GameState::Welcome => {
-                render_welcome_screen(&mut framebuffer, &maze);
+                render_welcome_screen(
+                    &mut framebuffer,
+                    &current_level.maze,
+                    selected_level_index,
+                    levels.len(),
+                );
             }
             GameState::Playing => match render_mode {
                 RenderMode::Mode2D => {
-                    render_maze(&mut framebuffer, &maze, BLOCK_SIZE);
+                    let (maze_offset_x, maze_offset_y) =
+                        maze_offset(&framebuffer, &current_level.maze, BLOCK_SIZE);
+
+                    render_maze(&mut framebuffer, &current_level.maze, BLOCK_SIZE);
                     cast_fov_2d(
                         &mut framebuffer,
-                        &maze,
+                        &current_level.maze,
                         &player,
                         BLOCK_SIZE,
                         maze_offset_x,
@@ -177,12 +267,18 @@ fn main() -> Result<(), minifb::Error> {
                     render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
                 }
                 RenderMode::Mode3D => {
-                    render_3d(&mut framebuffer, &maze, &player, BLOCK_SIZE, &textures);
-                    render_minimap(&mut framebuffer, &maze, &player, BLOCK_SIZE);
+                    render_3d(
+                        &mut framebuffer,
+                        &current_level.maze,
+                        &player,
+                        BLOCK_SIZE,
+                        &textures,
+                    );
+                    render_minimap(&mut framebuffer, &current_level.maze, &player, BLOCK_SIZE);
                 }
             },
             GameState::Won => {
-                render_victory_screen(&mut framebuffer, &maze);
+                render_victory_screen(&mut framebuffer, &current_level.maze);
             }
         }
 
@@ -216,5 +312,23 @@ mod tests {
         }
 
         assert_eq!(fps_counter.fps(), 60);
+    }
+
+    #[test]
+    fn next_level_index_wraps_to_first_level() {
+        assert_eq!(next_level_index(0, 3), 1);
+        assert_eq!(next_level_index(2, 3), 0);
+    }
+
+    #[test]
+    fn previous_level_index_wraps_to_last_level() {
+        assert_eq!(previous_level_index(2, 3), 1);
+        assert_eq!(previous_level_index(0, 3), 2);
+    }
+
+    #[test]
+    fn level_index_helpers_accept_empty_level_lists() {
+        assert_eq!(next_level_index(0, 0), 0);
+        assert_eq!(previous_level_index(0, 0), 0);
     }
 }
