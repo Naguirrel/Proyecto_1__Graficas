@@ -104,6 +104,27 @@ impl RenderMode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WelcomeMenuOption {
+    Start,
+    ChangeLevel,
+}
+
+impl WelcomeMenuOption {
+    const OPTIONS: [Self; 2] = [Self::Start, Self::ChangeLevel];
+
+    fn index(self) -> usize {
+        match self {
+            Self::Start => 0,
+            Self::ChangeLevel => 1,
+        }
+    }
+
+    fn from_index(index: usize) -> Self {
+        Self::OPTIONS[index % Self::OPTIONS.len()]
+    }
+}
+
 fn load_levels(paths: &[&str]) -> Vec<Level> {
     paths.iter().map(|path| Level::load(path)).collect()
 }
@@ -121,6 +142,22 @@ fn previous_level_index(current: usize, level_count: usize) -> usize {
         0
     } else {
         (current + level_count - 1) % level_count
+    }
+}
+
+fn next_menu_index(current: usize, option_count: usize) -> usize {
+    if option_count == 0 {
+        0
+    } else {
+        (current + 1) % option_count
+    }
+}
+
+fn previous_menu_index(current: usize, option_count: usize) -> usize {
+    if option_count == 0 {
+        0
+    } else {
+        (current + option_count - 1) % option_count
     }
 }
 
@@ -153,6 +190,7 @@ fn main() -> Result<(), minifb::Error> {
     let mut last_time = Instant::now();
     let mut render_mode = RenderMode::Mode3D;
     let mut game_state = GameState::Welcome;
+    let mut welcome_menu_option = WelcomeMenuOption::Start;
     let mut fps_counter = FpsCounter::new();
     let mut mouse_look = MouseLook::new();
     let mut gamepad_input = GamepadInput::new();
@@ -170,6 +208,27 @@ fn main() -> Result<(), minifb::Error> {
         match game_state {
             GameState::Welcome => {
                 let previous_level = selected_level_index;
+
+                if window.is_key_pressed(Key::W, KeyRepeat::No)
+                    || window.is_key_pressed(Key::Up, KeyRepeat::No)
+                    || gamepad.menu_up_pressed()
+                {
+                    welcome_menu_option =
+                        WelcomeMenuOption::from_index(previous_menu_index(
+                            welcome_menu_option.index(),
+                            WelcomeMenuOption::OPTIONS.len(),
+                        ));
+                }
+
+                if window.is_key_pressed(Key::S, KeyRepeat::No)
+                    || window.is_key_pressed(Key::Down, KeyRepeat::No)
+                    || gamepad.menu_down_pressed()
+                {
+                    welcome_menu_option = WelcomeMenuOption::from_index(next_menu_index(
+                        welcome_menu_option.index(),
+                        WelcomeMenuOption::OPTIONS.len(),
+                    ));
+                }
 
                 if window.is_key_pressed(Key::A, KeyRepeat::No)
                     || window.is_key_pressed(Key::Left, KeyRepeat::No)
@@ -195,12 +254,25 @@ fn main() -> Result<(), minifb::Error> {
                 }
 
                 if window.is_key_pressed(Key::Enter, KeyRepeat::No) || gamepad.confirm_pressed() {
-                    reset_player(
-                        &mut player,
-                        levels[selected_level_index].player_start,
-                        BLOCK_SIZE,
-                    );
-                    game_state = GameState::Playing;
+                    match welcome_menu_option {
+                        WelcomeMenuOption::Start => {
+                            reset_player(
+                                &mut player,
+                                levels[selected_level_index].player_start,
+                                BLOCK_SIZE,
+                            );
+                            game_state = GameState::Playing;
+                        }
+                        WelcomeMenuOption::ChangeLevel => {
+                            selected_level_index =
+                                next_level_index(selected_level_index, levels.len());
+                            reset_player(
+                                &mut player,
+                                levels[selected_level_index].player_start,
+                                BLOCK_SIZE,
+                            );
+                        }
+                    }
                 }
 
                 mouse_look.reset();
@@ -250,6 +322,7 @@ fn main() -> Result<(), minifb::Error> {
                     &current_level.maze,
                     selected_level_index,
                     levels.len(),
+                    welcome_menu_option.index(),
                 );
             }
             GameState::Playing => match render_mode {
@@ -332,5 +405,13 @@ mod tests {
     fn level_index_helpers_accept_empty_level_lists() {
         assert_eq!(next_level_index(0, 0), 0);
         assert_eq!(previous_level_index(0, 0), 0);
+    }
+
+    #[test]
+    fn menu_index_helpers_wrap_selection() {
+        assert_eq!(next_menu_index(0, 2), 1);
+        assert_eq!(next_menu_index(1, 2), 0);
+        assert_eq!(previous_menu_index(1, 2), 0);
+        assert_eq!(previous_menu_index(0, 2), 1);
     }
 }

@@ -179,6 +179,7 @@ pub fn render_welcome_screen(
     maze: &Maze,
     selected_level_index: usize,
     level_count: usize,
+    selected_option_index: usize,
 ) {
     let level_text = format!("NIVEL {} DE {}", selected_level_index + 1, level_count);
 
@@ -187,11 +188,19 @@ pub fn render_welcome_screen(
         maze,
         "RAYCASTING",
         Some(&level_text),
-        "ENTER INICIAR",
-        "A D NIVEL",
+        "",
+        "",
         VICTORY_ACCENT_COLOR,
     );
-    draw_text_centered(framebuffer, "ESC SALIR", 430, 5, VICTORY_TEXT_COLOR);
+    draw_menu_options(
+        framebuffer,
+        &["INICIAR", "CAMBIAR NIVEL"],
+        selected_option_index,
+        305,
+        5,
+    );
+    draw_text_centered(framebuffer, "A D NIVEL", 430, 5, VICTORY_TEXT_COLOR);
+    draw_text_centered(framebuffer, "ESC SALIR", 480, 5, VICTORY_TEXT_COLOR);
 }
 
 pub fn render_victory_screen(framebuffer: &mut Framebuffer, maze: &Maze) {
@@ -256,6 +265,27 @@ fn render_menu_screen(
     }
     draw_text_centered(framebuffer, primary_action, 315, 5, accent_color);
     draw_text_centered(framebuffer, secondary_action, 380, 5, VICTORY_TEXT_COLOR);
+}
+
+fn draw_menu_options(
+    framebuffer: &mut Framebuffer,
+    options: &[&str],
+    selected_option_index: usize,
+    start_y: isize,
+    scale: isize,
+) {
+    let row_gap = GLYPH_HEIGHT * scale + 18;
+
+    for (index, option) in options.iter().enumerate() {
+        let y = start_y + index as isize * row_gap;
+        let color = if index == selected_option_index {
+            VICTORY_ACCENT_COLOR
+        } else {
+            VICTORY_TEXT_COLOR
+        };
+
+        draw_text_centered(framebuffer, option, y, scale, color);
+    }
 }
 
 pub fn render_fps_overlay(framebuffer: &mut Framebuffer, fps: u32) {
@@ -733,6 +763,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         'A' => Some([
             0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001,
         ]),
+        'B' => Some([
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110,
+        ]),
         'C' => Some([
             0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111,
         ]),
@@ -753,6 +786,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         ]),
         'L' => Some([
             0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111,
+        ]),
+        'M' => Some([
+            0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001,
         ]),
         'N' => Some([
             0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001,
@@ -978,7 +1014,7 @@ mod tests {
         let maze = render_test_maze();
         let mut framebuffer = Framebuffer::new(800, 600);
 
-        render_welcome_screen(&mut framebuffer, &maze, 1, 3);
+        render_welcome_screen(&mut framebuffer, &maze, 1, 3, 0);
 
         assert!(framebuffer_contains(&framebuffer, VICTORY_TEXT_COLOR));
         assert!(framebuffer_contains(
@@ -995,7 +1031,7 @@ mod tests {
         let mut welcome = Framebuffer::new(800, 600);
         let mut victory = Framebuffer::new(800, 600);
 
-        render_welcome_screen(&mut welcome, &maze, 0, 3);
+        render_welcome_screen(&mut welcome, &maze, 0, 3, 0);
         render_victory_screen(&mut victory, &maze);
 
         assert_eq!(welcome.buffer[0], victory.buffer[0]);

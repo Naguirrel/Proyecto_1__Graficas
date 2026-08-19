@@ -26,6 +26,7 @@ pub struct GamepadSnapshot {
     left_stick_y: f32,
     right_stick_x: f32,
     previous_left_stick_x: f32,
+    previous_left_stick_y: f32,
     previous_buttons: GamepadButtons,
     buttons: GamepadButtons,
 }
@@ -77,6 +78,14 @@ impl GamepadSnapshot {
             || self.axis_pressed_right()
     }
 
+    pub fn menu_up_pressed(&self) -> bool {
+        self.button_pressed(|buttons| buttons.dpad_up) || self.axis_pressed_up()
+    }
+
+    pub fn menu_down_pressed(&self) -> bool {
+        self.button_pressed(|buttons| buttons.dpad_down) || self.axis_pressed_down()
+    }
+
     fn button_pressed<F>(&self, button_selector: F) -> bool
     where
         F: Fn(GamepadButtons) -> bool,
@@ -90,6 +99,14 @@ impl GamepadSnapshot {
 
     fn axis_pressed_right(&self) -> bool {
         self.left_stick_x > STICK_DEADZONE && self.previous_left_stick_x <= STICK_DEADZONE
+    }
+
+    fn axis_pressed_up(&self) -> bool {
+        self.left_stick_y > STICK_DEADZONE && self.previous_left_stick_y <= STICK_DEADZONE
+    }
+
+    fn axis_pressed_down(&self) -> bool {
+        self.left_stick_y < -STICK_DEADZONE && self.previous_left_stick_y >= -STICK_DEADZONE
     }
 }
 
@@ -166,6 +183,7 @@ impl GamepadInput {
                     left_stick_y: gamepad.value(Axis::LeftStickY),
                     right_stick_x: gamepad.value(Axis::RightStickX),
                     previous_left_stick_x: previous_snapshot.left_stick_x,
+                    previous_left_stick_y: previous_snapshot.left_stick_y,
                     previous_buttons: previous_snapshot.buttons,
                     buttons: GamepadButtons {
                         south: gamepad.is_pressed(Button::South),
