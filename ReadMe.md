@@ -63,6 +63,22 @@ TAB     Alternar 2D / 3D
 ESC     Salir
 ```
 
+Control PS5 / DualSense:
+
+```text
+Stick izquierdo / D-Pad
+        Avanzar, retroceder y navegar niveles
+Stick derecho
+        Girar camara horizontalmente
+L1 / R1 Girar camara horizontalmente
+X       Iniciar, saltar y reiniciar
+Triangulo / Share / R3
+        Alternar 2D / 3D
+Circulo / Cuadrado
+        Cambiar nivel en bienvenida
+Options Iniciar y reiniciar
+```
+
 Despues de ganar:
 
 ```text

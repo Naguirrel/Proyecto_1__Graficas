@@ -179,30 +179,104 @@ pub fn render_welcome_screen(
     maze: &Maze,
     selected_level_index: usize,
     level_count: usize,
+    selected_option_index: usize,
 ) {
     let level_text = format!("NIVEL {} DE {}", selected_level_index + 1, level_count);
 
-    render_menu_screen(
+    render_welcome_menu_screen(
         framebuffer,
         maze,
         "RAYCASTING",
         Some(&level_text),
-        "ENTER INICIAR",
-        "A D NIVEL",
         VICTORY_ACCENT_COLOR,
+        7,
+        20,
     );
-    draw_text_centered(framebuffer, "ESC SALIR", 430, 5, VICTORY_TEXT_COLOR);
+    draw_menu_options(
+        framebuffer,
+        &["INICIAR", "CAMBIAR NIVEL", "SALIR"],
+        selected_option_index,
+        325,
+        4,
+    );
 }
 
-pub fn render_victory_screen(framebuffer: &mut Framebuffer, maze: &Maze) {
+fn render_welcome_menu_screen(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    title: &str,
+    detail: Option<&str>,
+    accent_color: u32,
+    motif_cell_size: usize,
+    motif_bottom_margin: usize,
+) {
+    render_menu_frame(
+        framebuffer,
+        maze,
+        accent_color,
+        motif_cell_size,
+        motif_bottom_margin,
+    );
+    draw_text_centered(framebuffer, title, 135, 8, VICTORY_TEXT_COLOR);
+    if let Some(detail) = detail {
+        draw_text_centered(framebuffer, detail, 245, 5, VICTORY_TEXT_COLOR);
+    }
+}
+
+pub fn render_victory_screen(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    selected_level_index: usize,
+    level_count: usize,
+    selected_option_index: usize,
+) {
     render_menu_screen(
         framebuffer,
         maze,
         "GANASTE",
         None,
-        "R REINICIAR",
-        "ESC SALIR",
+        "",
+        "",
         VICTORY_ACCENT_COLOR,
+    );
+
+    if selected_level_index + 1 < level_count {
+        draw_menu_options(
+            framebuffer,
+            &["REINICIAR", "SIGUIENTE NIVEL", "MENU PRINCIPAL"],
+            selected_option_index,
+            285,
+            5,
+        );
+    } else {
+        draw_menu_options(
+            framebuffer,
+            &["REINICIAR", "MENU PRINCIPAL"],
+            selected_option_index,
+            310,
+            5,
+        );
+    }
+}
+
+pub fn render_pause_menu(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    selected_level_index: usize,
+    level_count: usize,
+    selected_option_index: usize,
+) {
+    let level_text = format!("NIVEL {} DE {}", selected_level_index + 1, level_count);
+
+    render_menu_frame(framebuffer, maze, VICTORY_ACCENT_COLOR, 7, 20);
+    draw_text_centered(framebuffer, "PAUSA", 135, 8, VICTORY_TEXT_COLOR);
+    draw_text_centered(framebuffer, &level_text, 235, 5, VICTORY_TEXT_COLOR);
+    draw_menu_options(
+        framebuffer,
+        &["CONTINUAR", "CAMBIAR NIVEL", "MENU PRINCIPAL"],
+        selected_option_index,
+        320,
+        4,
     );
 }
 
@@ -215,9 +289,55 @@ fn render_menu_screen(
     secondary_action: &str,
     accent_color: u32,
 ) {
+    render_menu_screen_with_motif(
+        framebuffer,
+        maze,
+        title,
+        detail,
+        primary_action,
+        secondary_action,
+        accent_color,
+        MENU_MAZE_CELL_SIZE,
+        MENU_MAZE_BOTTOM_MARGIN,
+    );
+}
+
+fn render_menu_screen_with_motif(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    title: &str,
+    detail: Option<&str>,
+    primary_action: &str,
+    secondary_action: &str,
+    accent_color: u32,
+    motif_cell_size: usize,
+    motif_bottom_margin: usize,
+) {
+    render_menu_frame(
+        framebuffer,
+        maze,
+        accent_color,
+        motif_cell_size,
+        motif_bottom_margin,
+    );
+    draw_text_centered(framebuffer, title, 135, 8, VICTORY_TEXT_COLOR);
+    if let Some(detail) = detail {
+        draw_text_centered(framebuffer, detail, 255, 5, VICTORY_TEXT_COLOR);
+    }
+    draw_text_centered(framebuffer, primary_action, 315, 5, accent_color);
+    draw_text_centered(framebuffer, secondary_action, 380, 5, VICTORY_TEXT_COLOR);
+}
+
+fn render_menu_frame(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    accent_color: u32,
+    motif_cell_size: usize,
+    motif_bottom_margin: usize,
+) {
     fill_screen(framebuffer, VICTORY_BACKGROUND_COLOR);
     draw_menu_wall_bands(framebuffer);
-    draw_menu_maze_motif(framebuffer, maze);
+    draw_menu_maze_motif(framebuffer, maze, motif_cell_size, motif_bottom_margin);
 
     let margin = 24;
     framebuffer.set_current_color(accent_color);
@@ -249,13 +369,27 @@ fn render_menu_screen(
         framebuffer.width as isize - margin,
         framebuffer.height as isize - margin,
     );
+}
 
-    draw_text_centered(framebuffer, title, 135, 8, VICTORY_TEXT_COLOR);
-    if let Some(detail) = detail {
-        draw_text_centered(framebuffer, detail, 255, 5, VICTORY_TEXT_COLOR);
+fn draw_menu_options(
+    framebuffer: &mut Framebuffer,
+    options: &[&str],
+    selected_option_index: usize,
+    start_y: isize,
+    scale: isize,
+) {
+    let row_gap = GLYPH_HEIGHT * scale + 18;
+
+    for (index, option) in options.iter().enumerate() {
+        let y = start_y + index as isize * row_gap;
+        let color = if index == selected_option_index {
+            VICTORY_ACCENT_COLOR
+        } else {
+            VICTORY_TEXT_COLOR
+        };
+
+        draw_text_centered(framebuffer, option, y, scale, color);
     }
-    draw_text_centered(framebuffer, primary_action, 315, 5, accent_color);
-    draw_text_centered(framebuffer, secondary_action, 380, 5, VICTORY_TEXT_COLOR);
 }
 
 pub fn render_fps_overlay(framebuffer: &mut Framebuffer, fps: u32) {
@@ -519,7 +653,12 @@ fn draw_menu_wall_bands(framebuffer: &mut Framebuffer) {
     }
 }
 
-fn draw_menu_maze_motif(framebuffer: &mut Framebuffer, maze: &Maze) {
+fn draw_menu_maze_motif(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    cell_size_limit: usize,
+    bottom_margin: usize,
+) {
     if maze.is_empty() || framebuffer.width == 0 || framebuffer.height == 0 {
         return;
     }
@@ -531,7 +670,7 @@ fn draw_menu_maze_motif(framebuffer: &mut Framebuffer, maze: &Maze) {
         return;
     }
 
-    let cell_size = MENU_MAZE_CELL_SIZE
+    let cell_size = cell_size_limit
         .min((framebuffer.width / maze_width).max(1))
         .min((framebuffer.height / maze_height).max(1));
     let motif_width = maze_width * cell_size;
@@ -539,7 +678,7 @@ fn draw_menu_maze_motif(framebuffer: &mut Framebuffer, maze: &Maze) {
     let offset_x = framebuffer.width.saturating_sub(motif_width) / 2;
     let offset_y = framebuffer
         .height
-        .saturating_sub(motif_height + MENU_MAZE_BOTTOM_MARGIN);
+        .saturating_sub(motif_height + bottom_margin);
 
     for (row_index, row) in maze.iter().enumerate() {
         for (column_index, cell) in row.iter().enumerate() {
@@ -733,6 +872,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         'A' => Some([
             0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001,
         ]),
+        'B' => Some([
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110,
+        ]),
         'C' => Some([
             0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111,
         ]),
@@ -754,8 +896,14 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         'L' => Some([
             0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111,
         ]),
+        'M' => Some([
+            0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001,
+        ]),
         'N' => Some([
             0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001,
+        ]),
+        'O' => Some([
+            0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110,
         ]),
         'P' => Some([
             0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000,
@@ -768,6 +916,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         ]),
         'T' => Some([
             0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+        ]),
+        'U' => Some([
+            0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110,
         ]),
         'V' => Some([
             0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100,
@@ -978,7 +1129,7 @@ mod tests {
         let maze = render_test_maze();
         let mut framebuffer = Framebuffer::new(800, 600);
 
-        render_welcome_screen(&mut framebuffer, &maze, 1, 3);
+        render_welcome_screen(&mut framebuffer, &maze, 1, 3, 0);
 
         assert!(framebuffer_contains(&framebuffer, VICTORY_TEXT_COLOR));
         assert!(framebuffer_contains(
@@ -995,10 +1146,33 @@ mod tests {
         let mut welcome = Framebuffer::new(800, 600);
         let mut victory = Framebuffer::new(800, 600);
 
-        render_welcome_screen(&mut welcome, &maze, 0, 3);
-        render_victory_screen(&mut victory, &maze);
+        render_welcome_screen(&mut welcome, &maze, 0, 3, 0);
+        render_victory_screen(&mut victory, &maze, 0, 3, 0);
 
         assert_eq!(welcome.buffer[0], victory.buffer[0]);
         assert!(framebuffer_contains(&victory, VICTORY_ACCENT_COLOR));
+    }
+
+    #[test]
+    fn victory_screen_can_render_without_next_level_option() {
+        let maze = render_test_maze();
+        let mut framebuffer = Framebuffer::new(800, 600);
+
+        render_victory_screen(&mut framebuffer, &maze, 2, 3, 0);
+
+        assert!(framebuffer_contains(&framebuffer, VICTORY_ACCENT_COLOR));
+        assert!(glyph('M').is_some());
+        assert!(glyph('U').is_some());
+    }
+
+    #[test]
+    fn pause_menu_draws_all_requested_options() {
+        let maze = render_test_maze();
+        let mut framebuffer = Framebuffer::new(800, 600);
+
+        render_pause_menu(&mut framebuffer, &maze, 1, 3, 0);
+
+        assert!(framebuffer_contains(&framebuffer, VICTORY_ACCENT_COLOR));
+        assert!(glyph('O').is_some());
     }
 }

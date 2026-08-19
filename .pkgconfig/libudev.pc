@@ -1,0 +1,9 @@
+prefix=/usr
+libdir=/usr/lib64
+includedir=/usr/include
+
+Name: libudev
+Description: Local pkg-config shim for gilrs on Fedora systems with libudev runtime installed
+Version: 1
+Libs: -L${libdir} -l:libudev.so.1
+Cflags:
