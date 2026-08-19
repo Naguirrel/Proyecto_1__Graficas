@@ -183,13 +183,11 @@ pub fn render_welcome_screen(
 ) {
     let level_text = format!("NIVEL {} DE {}", selected_level_index + 1, level_count);
 
-    render_menu_screen_with_motif(
+    render_welcome_menu_screen(
         framebuffer,
         maze,
         "RAYCASTING",
         Some(&level_text),
-        "",
-        "",
         VICTORY_ACCENT_COLOR,
         7,
         20,
@@ -198,9 +196,31 @@ pub fn render_welcome_screen(
         framebuffer,
         &["INICIAR", "CAMBIAR NIVEL", "SALIR"],
         selected_option_index,
-        290,
+        325,
         4,
     );
+}
+
+fn render_welcome_menu_screen(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    title: &str,
+    detail: Option<&str>,
+    accent_color: u32,
+    motif_cell_size: usize,
+    motif_bottom_margin: usize,
+) {
+    render_menu_frame(
+        framebuffer,
+        maze,
+        accent_color,
+        motif_cell_size,
+        motif_bottom_margin,
+    );
+    draw_text_centered(framebuffer, title, 135, 8, VICTORY_TEXT_COLOR);
+    if let Some(detail) = detail {
+        draw_text_centered(framebuffer, detail, 245, 5, VICTORY_TEXT_COLOR);
+    }
 }
 
 pub fn render_victory_screen(
@@ -301,6 +321,28 @@ fn render_menu_screen_with_motif(
     motif_cell_size: usize,
     motif_bottom_margin: usize,
 ) {
+    render_menu_frame(
+        framebuffer,
+        maze,
+        accent_color,
+        motif_cell_size,
+        motif_bottom_margin,
+    );
+    draw_text_centered(framebuffer, title, 135, 8, VICTORY_TEXT_COLOR);
+    if let Some(detail) = detail {
+        draw_text_centered(framebuffer, detail, 255, 5, VICTORY_TEXT_COLOR);
+    }
+    draw_text_centered(framebuffer, primary_action, 315, 5, accent_color);
+    draw_text_centered(framebuffer, secondary_action, 380, 5, VICTORY_TEXT_COLOR);
+}
+
+fn render_menu_frame(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    accent_color: u32,
+    motif_cell_size: usize,
+    motif_bottom_margin: usize,
+) {
     fill_screen(framebuffer, VICTORY_BACKGROUND_COLOR);
     draw_menu_wall_bands(framebuffer);
     draw_menu_maze_motif(framebuffer, maze, motif_cell_size, motif_bottom_margin);
@@ -335,13 +377,6 @@ fn render_menu_screen_with_motif(
         framebuffer.width as isize - margin,
         framebuffer.height as isize - margin,
     );
-
-    draw_text_centered(framebuffer, title, 135, 8, VICTORY_TEXT_COLOR);
-    if let Some(detail) = detail {
-        draw_text_centered(framebuffer, detail, 255, 5, VICTORY_TEXT_COLOR);
-    }
-    draw_text_centered(framebuffer, primary_action, 315, 5, accent_color);
-    draw_text_centered(framebuffer, secondary_action, 380, 5, VICTORY_TEXT_COLOR);
 }
 
 fn draw_menu_options(
