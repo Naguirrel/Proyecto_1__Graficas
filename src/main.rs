@@ -139,16 +139,10 @@ enum PauseMenuOption {
     Continue,
     ChangeLevel,
     MainMenu,
-    Exit,
 }
 
 impl PauseMenuOption {
-    const OPTIONS: [Self; 4] = [
-        Self::Continue,
-        Self::ChangeLevel,
-        Self::MainMenu,
-        Self::Exit,
-    ];
+    const OPTIONS: [Self; 3] = [Self::Continue, Self::ChangeLevel, Self::MainMenu];
 
     fn at(index: usize) -> Self {
         Self::OPTIONS[index % Self::OPTIONS.len()]
@@ -424,9 +418,6 @@ fn main() -> Result<(), minifb::Error> {
                                 render_mode = RenderMode::Mode3D;
                                 game_state = GameState::Welcome;
                             }
-                            PauseMenuOption::Exit => {
-                                should_exit = true;
-                            }
                         }
                     }
                 }
@@ -627,6 +618,5 @@ mod tests {
         assert_eq!(PauseMenuOption::at(0), PauseMenuOption::Continue);
         assert_eq!(PauseMenuOption::at(1), PauseMenuOption::ChangeLevel);
         assert_eq!(PauseMenuOption::at(2), PauseMenuOption::MainMenu);
-        assert_eq!(PauseMenuOption::at(3), PauseMenuOption::Exit);
     }
 }

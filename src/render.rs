@@ -201,7 +201,6 @@ pub fn render_welcome_screen(
         290,
         4,
     );
-    draw_text_centered(framebuffer, "A D NIVEL", 430, 4, VICTORY_TEXT_COLOR);
 }
 
 pub fn render_victory_screen(
@@ -262,9 +261,9 @@ pub fn render_pause_menu(
     );
     draw_menu_options(
         framebuffer,
-        &["CONTINUAR", "CAMBIAR NIVEL", "MENU PRINCIPAL", "SALIR"],
+        &["CONTINUAR", "CAMBIAR NIVEL", "MENU PRINCIPAL"],
         selected_option_index,
-        275,
+        290,
         4,
     );
 }
