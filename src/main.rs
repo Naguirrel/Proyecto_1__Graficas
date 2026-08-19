@@ -108,15 +108,17 @@ impl RenderMode {
 enum WelcomeMenuOption {
     Start,
     ChangeLevel,
+    Exit,
 }
 
 impl WelcomeMenuOption {
-    const OPTIONS: [Self; 2] = [Self::Start, Self::ChangeLevel];
+    const OPTIONS: [Self; 3] = [Self::Start, Self::ChangeLevel, Self::Exit];
 
     fn index(self) -> usize {
         match self {
             Self::Start => 0,
             Self::ChangeLevel => 1,
+            Self::Exit => 2,
         }
     }
 
@@ -137,10 +139,16 @@ enum PauseMenuOption {
     Continue,
     ChangeLevel,
     MainMenu,
+    Exit,
 }
 
 impl PauseMenuOption {
-    const OPTIONS: [Self; 3] = [Self::Continue, Self::ChangeLevel, Self::MainMenu];
+    const OPTIONS: [Self; 4] = [
+        Self::Continue,
+        Self::ChangeLevel,
+        Self::MainMenu,
+        Self::Exit,
+    ];
 
     fn at(index: usize) -> Self {
         Self::OPTIONS[index % Self::OPTIONS.len()]
@@ -239,8 +247,9 @@ fn main() -> Result<(), minifb::Error> {
     let mut fps_counter = FpsCounter::new();
     let mut mouse_look = MouseLook::new();
     let mut gamepad_input = GamepadInput::new();
+    let mut should_exit = false;
 
-    while window.is_open() && !window.is_key_down(Key::Escape) {
+    while window.is_open() && !window.is_key_down(Key::Escape) && !should_exit {
         let current_time = Instant::now();
         let delta_time = current_time
             .duration_since(last_time)
@@ -315,6 +324,9 @@ fn main() -> Result<(), minifb::Error> {
                                 levels[selected_level_index].player_start,
                                 BLOCK_SIZE,
                             );
+                        }
+                        WelcomeMenuOption::Exit => {
+                            should_exit = true;
                         }
                     }
                 }
@@ -411,6 +423,9 @@ fn main() -> Result<(), minifb::Error> {
                                 );
                                 render_mode = RenderMode::Mode3D;
                                 game_state = GameState::Welcome;
+                            }
+                            PauseMenuOption::Exit => {
+                                should_exit = true;
                             }
                         }
                     }
@@ -612,5 +627,6 @@ mod tests {
         assert_eq!(PauseMenuOption::at(0), PauseMenuOption::Continue);
         assert_eq!(PauseMenuOption::at(1), PauseMenuOption::ChangeLevel);
         assert_eq!(PauseMenuOption::at(2), PauseMenuOption::MainMenu);
+        assert_eq!(PauseMenuOption::at(3), PauseMenuOption::Exit);
     }
 }
