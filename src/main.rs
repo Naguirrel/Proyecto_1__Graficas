@@ -11,7 +11,7 @@ pub mod texture;
 use caster::cast_fov_2d;
 use framebuffer::Framebuffer;
 use game::{GameState, player_reached_goal, reset_player};
-use input::{MouseLook, process_input};
+use input::{ControllerInput, MouseLook, process_input};
 use maze::{Maze, find_char, load_maze, validate_maze};
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
@@ -153,6 +153,7 @@ fn main() -> Result<(), minifb::Error> {
     let mut game_state = GameState::Welcome;
     let mut fps_counter = FpsCounter::new();
     let mut mouse_look = MouseLook::new();
+    let mut controller = ControllerInput::new();
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let current_time = Instant::now();
@@ -162,6 +163,7 @@ fn main() -> Result<(), minifb::Error> {
             .min(0.1);
         last_time = current_time;
         fps_counter.update(delta_time);
+        controller.update();
 
         match game_state {
             GameState::Welcome => {
@@ -169,12 +171,14 @@ fn main() -> Result<(), minifb::Error> {
 
                 if window.is_key_pressed(Key::A, KeyRepeat::No)
                     || window.is_key_pressed(Key::Left, KeyRepeat::No)
+                    || controller.menu_left_pressed()
                 {
                     selected_level_index = previous_level_index(selected_level_index, levels.len());
                 }
 
                 if window.is_key_pressed(Key::D, KeyRepeat::No)
                     || window.is_key_pressed(Key::Right, KeyRepeat::No)
+                    || controller.menu_right_pressed()
                 {
                     selected_level_index = next_level_index(selected_level_index, levels.len());
                 }
@@ -188,7 +192,7 @@ fn main() -> Result<(), minifb::Error> {
                     render_mode = RenderMode::Mode3D;
                 }
 
-                if window.is_key_pressed(Key::Enter, KeyRepeat::No) {
+                if window.is_key_pressed(Key::Enter, KeyRepeat::No) || controller.start_pressed() {
                     reset_player(
                         &mut player,
                         levels[selected_level_index].player_start,
@@ -206,6 +210,7 @@ fn main() -> Result<(), minifb::Error> {
                     &window,
                     &mut player,
                     &mut mouse_look,
+                    &controller,
                     &current_level.maze,
                     BLOCK_SIZE,
                     delta_time,
@@ -213,12 +218,14 @@ fn main() -> Result<(), minifb::Error> {
 
                 if player_reached_goal(&current_level.maze, &player, BLOCK_SIZE) {
                     game_state = GameState::Won;
-                } else if window.is_key_pressed(Key::Tab, KeyRepeat::No) {
+                } else if window.is_key_pressed(Key::Tab, KeyRepeat::No)
+                    || controller.select_pressed()
+                {
                     render_mode = render_mode.toggle();
                 }
             }
             GameState::Won => {
-                if window.is_key_pressed(Key::R, KeyRepeat::No) {
+                if window.is_key_pressed(Key::R, KeyRepeat::No) || controller.start_pressed() {
                     reset_player(
                         &mut player,
                         levels[selected_level_index].player_start,
