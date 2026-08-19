@@ -37,7 +37,7 @@ desde archivos `.txt`, permite escoger entre tres niveles, recorrerlos en vista
 | Criterio | Puntos |
 | --- | ---: |
 | Multiple Hardware: soporte a mando/control | 20 pts |
-| Criterio con marcas | 30 pts |
+| Estetica | 30 pts |
 | 15 FPS estables | 15 pts |
 | Camara con movimiento por mouse | 30 pts |
 | Minimapa | 10 pts |
