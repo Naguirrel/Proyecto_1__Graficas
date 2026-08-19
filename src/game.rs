@@ -5,6 +5,7 @@ use crate::player::Player;
 pub enum GameState {
     Welcome,
     Playing,
+    Paused,
     Won,
 }
 

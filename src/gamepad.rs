@@ -64,6 +64,10 @@ impl GamepadSnapshot {
         self.button_pressed(|buttons| buttons.north || buttons.select || buttons.right_thumb)
     }
 
+    pub fn pause_pressed(&self) -> bool {
+        self.button_pressed(|buttons| buttons.start)
+    }
+
     pub fn previous_level_pressed(&self) -> bool {
         self.button_pressed(|buttons| buttons.dpad_left || buttons.west || buttons.left_trigger)
             || self.axis_pressed_left()

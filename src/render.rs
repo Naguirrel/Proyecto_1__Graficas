@@ -239,6 +239,33 @@ pub fn render_victory_screen(
     }
 }
 
+pub fn render_pause_menu(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    selected_level_index: usize,
+    level_count: usize,
+    selected_option_index: usize,
+) {
+    let level_text = format!("NIVEL {} DE {}", selected_level_index + 1, level_count);
+
+    render_menu_screen(
+        framebuffer,
+        maze,
+        "PAUSA",
+        Some(&level_text),
+        "",
+        "",
+        VICTORY_ACCENT_COLOR,
+    );
+    draw_menu_options(
+        framebuffer,
+        &["CONTINUAR", "CAMBIAR NIVEL", "MENU PRINCIPAL"],
+        selected_option_index,
+        285,
+        5,
+    );
+}
+
 fn render_menu_screen(
     framebuffer: &mut Framebuffer,
     maze: &Maze,
@@ -817,6 +844,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         'N' => Some([
             0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001,
         ]),
+        'O' => Some([
+            0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110,
+        ]),
         'P' => Some([
             0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000,
         ]),
@@ -1075,5 +1105,16 @@ mod tests {
         assert!(framebuffer_contains(&framebuffer, VICTORY_ACCENT_COLOR));
         assert!(glyph('M').is_some());
         assert!(glyph('U').is_some());
+    }
+
+    #[test]
+    fn pause_menu_draws_all_requested_options() {
+        let maze = render_test_maze();
+        let mut framebuffer = Framebuffer::new(800, 600);
+
+        render_pause_menu(&mut framebuffer, &maze, 1, 3, 0);
+
+        assert!(framebuffer_contains(&framebuffer, VICTORY_ACCENT_COLOR));
+        assert!(glyph('O').is_some());
     }
 }

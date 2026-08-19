@@ -18,8 +18,8 @@ use maze::{Maze, find_char, load_maze, validate_maze};
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
 use render::{
-    maze_offset, render_3d, render_fps_overlay, render_maze, render_minimap, render_player,
-    render_victory_screen, render_welcome_screen,
+    maze_offset, render_3d, render_fps_overlay, render_maze, render_minimap, render_pause_menu,
+    render_player, render_victory_screen, render_welcome_screen,
 };
 use std::time::Instant;
 use texture::TextureManager;
@@ -132,6 +132,21 @@ enum VictoryMenuOption {
     MainMenu,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PauseMenuOption {
+    Continue,
+    ChangeLevel,
+    MainMenu,
+}
+
+impl PauseMenuOption {
+    const OPTIONS: [Self; 3] = [Self::Continue, Self::ChangeLevel, Self::MainMenu];
+
+    fn at(index: usize) -> Self {
+        Self::OPTIONS[index % Self::OPTIONS.len()]
+    }
+}
+
 fn load_levels(paths: &[&str]) -> Vec<Level> {
     paths.iter().map(|path| Level::load(path)).collect()
 }
@@ -219,6 +234,8 @@ fn main() -> Result<(), minifb::Error> {
     let mut game_state = GameState::Welcome;
     let mut welcome_menu_option = WelcomeMenuOption::Start;
     let mut victory_menu_index = 0;
+    let mut pause_menu_index = 0;
+    let mut pause_level_index = selected_level_index;
     let mut fps_counter = FpsCounter::new();
     let mut mouse_look = MouseLook::new();
     let mut gamepad_input = GamepadInput::new();
@@ -307,24 +324,99 @@ fn main() -> Result<(), minifb::Error> {
             GameState::Playing => {
                 let current_level = &levels[selected_level_index];
 
-                process_input(
-                    &window,
-                    &mut player,
-                    &mut mouse_look,
-                    &current_level.maze,
-                    BLOCK_SIZE,
-                    delta_time,
-                    &gamepad,
-                );
+                if window.is_key_pressed(Key::P, KeyRepeat::No) || gamepad.pause_pressed() {
+                    pause_menu_index = 0;
+                    pause_level_index = selected_level_index;
+                    game_state = GameState::Paused;
+                    mouse_look.reset();
+                } else {
+                    process_input(
+                        &window,
+                        &mut player,
+                        &mut mouse_look,
+                        &current_level.maze,
+                        BLOCK_SIZE,
+                        delta_time,
+                        &gamepad,
+                    );
 
-                if player_reached_goal(&current_level.maze, &player, BLOCK_SIZE) {
-                    game_state = GameState::Won;
-                    victory_menu_index = 0;
-                } else if window.is_key_pressed(Key::Tab, KeyRepeat::No)
-                    || gamepad.toggle_view_pressed()
-                {
-                    render_mode = render_mode.toggle();
+                    if player_reached_goal(&current_level.maze, &player, BLOCK_SIZE) {
+                        game_state = GameState::Won;
+                        victory_menu_index = 0;
+                    } else if window.is_key_pressed(Key::Tab, KeyRepeat::No)
+                        || gamepad.toggle_view_pressed()
+                    {
+                        render_mode = render_mode.toggle();
+                    }
                 }
+            }
+            GameState::Paused => {
+                if window.is_key_pressed(Key::P, KeyRepeat::No) || gamepad.pause_pressed() {
+                    game_state = GameState::Playing;
+                } else {
+                    if window.is_key_pressed(Key::W, KeyRepeat::No)
+                        || window.is_key_pressed(Key::Up, KeyRepeat::No)
+                        || gamepad.menu_up_pressed()
+                    {
+                        pause_menu_index =
+                            previous_menu_index(pause_menu_index, PauseMenuOption::OPTIONS.len());
+                    }
+
+                    if window.is_key_pressed(Key::S, KeyRepeat::No)
+                        || window.is_key_pressed(Key::Down, KeyRepeat::No)
+                        || gamepad.menu_down_pressed()
+                    {
+                        pause_menu_index =
+                            next_menu_index(pause_menu_index, PauseMenuOption::OPTIONS.len());
+                    }
+
+                    if PauseMenuOption::at(pause_menu_index) == PauseMenuOption::ChangeLevel {
+                        if window.is_key_pressed(Key::A, KeyRepeat::No)
+                            || window.is_key_pressed(Key::Left, KeyRepeat::No)
+                            || gamepad.previous_level_pressed()
+                        {
+                            pause_level_index =
+                                previous_level_index(pause_level_index, levels.len());
+                        }
+
+                        if window.is_key_pressed(Key::D, KeyRepeat::No)
+                            || window.is_key_pressed(Key::Right, KeyRepeat::No)
+                            || gamepad.next_level_pressed()
+                        {
+                            pause_level_index = next_level_index(pause_level_index, levels.len());
+                        }
+                    }
+
+                    if window.is_key_pressed(Key::Enter, KeyRepeat::No) || gamepad.confirm_pressed()
+                    {
+                        match PauseMenuOption::at(pause_menu_index) {
+                            PauseMenuOption::Continue => {
+                                game_state = GameState::Playing;
+                            }
+                            PauseMenuOption::ChangeLevel => {
+                                selected_level_index = pause_level_index;
+                                reset_player(
+                                    &mut player,
+                                    levels[selected_level_index].player_start,
+                                    BLOCK_SIZE,
+                                );
+                                render_mode = RenderMode::Mode3D;
+                                game_state = GameState::Playing;
+                            }
+                            PauseMenuOption::MainMenu => {
+                                reset_player(
+                                    &mut player,
+                                    levels[selected_level_index].player_start,
+                                    BLOCK_SIZE,
+                                );
+                                render_mode = RenderMode::Mode3D;
+                                game_state = GameState::Welcome;
+                            }
+                        }
+                    }
+                }
+
+                mouse_look.reset();
             }
             GameState::Won => {
                 let option_count = victory_option_count(selected_level_index, levels.len());
@@ -429,6 +521,15 @@ fn main() -> Result<(), minifb::Error> {
                     render_minimap(&mut framebuffer, &current_level.maze, &player, BLOCK_SIZE);
                 }
             },
+            GameState::Paused => {
+                render_pause_menu(
+                    &mut framebuffer,
+                    &levels[pause_level_index].maze,
+                    pause_level_index,
+                    levels.len(),
+                    pause_menu_index,
+                );
+            }
             GameState::Won => {
                 render_victory_screen(
                     &mut framebuffer,
@@ -504,5 +605,12 @@ mod tests {
         assert_eq!(victory_option_count(2, 3), 2);
         assert_eq!(victory_option_at(1, 0, 3), VictoryMenuOption::NextLevel);
         assert_eq!(victory_option_at(1, 2, 3), VictoryMenuOption::MainMenu);
+    }
+
+    #[test]
+    fn pause_menu_options_keep_fixed_order() {
+        assert_eq!(PauseMenuOption::at(0), PauseMenuOption::Continue);
+        assert_eq!(PauseMenuOption::at(1), PauseMenuOption::ChangeLevel);
+        assert_eq!(PauseMenuOption::at(2), PauseMenuOption::MainMenu);
     }
 }
