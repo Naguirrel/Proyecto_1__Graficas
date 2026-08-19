@@ -32,6 +32,19 @@ desde archivos `.txt`, permite escoger entre tres niveles, recorrerlos en vista
 - Meta y condicion de victoria.
 - Pantalla de exito.
 
+## Rubrica cumplida hasta el momento
+
+| Criterio | Puntos |
+| --- | ---: |
+| Multiple Hardware: soporte a mando/control | 20 pts |
+| Criterio con marcas | 30 pts |
+| 15 FPS estables | 15 pts |
+| Camara con movimiento por mouse | 30 pts |
+| Minimapa | 10 pts |
+| Pantalla de bienvenida con seleccion de niveles | 15 pts |
+| Pantalla de exito | 10 pts |
+| **Total cumplido hasta el momento** | **130 pts** |
+
 ## Ejecutar
 
 ```bash
