@@ -203,16 +203,40 @@ pub fn render_welcome_screen(
     draw_text_centered(framebuffer, "ESC SALIR", 480, 5, VICTORY_TEXT_COLOR);
 }
 
-pub fn render_victory_screen(framebuffer: &mut Framebuffer, maze: &Maze) {
+pub fn render_victory_screen(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    selected_level_index: usize,
+    level_count: usize,
+    selected_option_index: usize,
+) {
     render_menu_screen(
         framebuffer,
         maze,
         "GANASTE",
         None,
-        "R REINICIAR",
-        "ESC SALIR",
+        "",
+        "",
         VICTORY_ACCENT_COLOR,
     );
+
+    if selected_level_index + 1 < level_count {
+        draw_menu_options(
+            framebuffer,
+            &["REINICIAR", "SIGUIENTE NIVEL", "MENU PRINCIPAL"],
+            selected_option_index,
+            285,
+            5,
+        );
+    } else {
+        draw_menu_options(
+            framebuffer,
+            &["REINICIAR", "MENU PRINCIPAL"],
+            selected_option_index,
+            310,
+            5,
+        );
+    }
 }
 
 fn render_menu_screen(
@@ -805,6 +829,9 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
         'T' => Some([
             0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
         ]),
+        'U' => Some([
+            0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110,
+        ]),
         'V' => Some([
             0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100,
         ]),
@@ -1032,9 +1059,21 @@ mod tests {
         let mut victory = Framebuffer::new(800, 600);
 
         render_welcome_screen(&mut welcome, &maze, 0, 3, 0);
-        render_victory_screen(&mut victory, &maze);
+        render_victory_screen(&mut victory, &maze, 0, 3, 0);
 
         assert_eq!(welcome.buffer[0], victory.buffer[0]);
         assert!(framebuffer_contains(&victory, VICTORY_ACCENT_COLOR));
+    }
+
+    #[test]
+    fn victory_screen_can_render_without_next_level_option() {
+        let maze = render_test_maze();
+        let mut framebuffer = Framebuffer::new(800, 600);
+
+        render_victory_screen(&mut framebuffer, &maze, 2, 3, 0);
+
+        assert!(framebuffer_contains(&framebuffer, VICTORY_ACCENT_COLOR));
+        assert!(glyph('M').is_some());
+        assert!(glyph('U').is_some());
     }
 }

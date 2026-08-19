@@ -60,10 +60,6 @@ impl GamepadSnapshot {
         self.button_pressed(|buttons| buttons.south || buttons.start)
     }
 
-    pub fn restart_pressed(&self) -> bool {
-        self.button_pressed(|buttons| buttons.south || buttons.start)
-    }
-
     pub fn toggle_view_pressed(&self) -> bool {
         self.button_pressed(|buttons| buttons.north || buttons.select || buttons.right_thumb)
     }
