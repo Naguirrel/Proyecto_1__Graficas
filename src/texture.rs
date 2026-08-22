@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::Path;
 
 use crate::caster::WallSide;
+use crate::sprite::SpriteKind;
 
 const DEFAULT_TEXTURE_PATHS: [(char, &str); 6] = [
     ('#', "assets/wall1.png"),
@@ -14,6 +15,11 @@ const DEFAULT_TEXTURE_PATHS: [(char, &str); 6] = [
     ('!', "assets/wall5.png"),
 ];
 const FLOOR_TEXTURE_PATH: &str = "assets/piso.png";
+const FOOD_TEXTURE_PATH: &str = "assets/comida.png";
+const GHOST_1_TEXTURE_PATH: &str = "assets/fantasma_1.png";
+const GHOST_2_TEXTURE_PATH: &str = "assets/fantasma_2.png";
+const GHOST_3_TEXTURE_PATH: &str = "assets/fantasma_3.png";
+const SCARED_GHOST_TEXTURE_PATH: &str = "assets/fantasma_asustado.png";
 
 const FALLBACK_MAGENTA: u32 = 0xff00ff;
 const FALLBACK_BLACK: u32 = 0x000000;
@@ -23,6 +29,7 @@ pub struct Texture {
     pub width: usize,
     pub height: usize,
     pixels: Vec<u32>,
+    transparent: Vec<bool>,
 }
 
 #[derive(Debug)]
@@ -32,6 +39,12 @@ pub enum TextureError {
         height: usize,
     },
     PixelCountMismatch {
+        width: usize,
+        height: usize,
+        expected: usize,
+        actual: usize,
+    },
+    TransparencyCountMismatch {
         width: usize,
         height: usize,
         expected: usize,
@@ -60,6 +73,17 @@ impl fmt::Display for TextureError {
                     "texture {width}x{height} needs {expected} pixels, got {actual}"
                 )
             }
+            Self::TransparencyCountMismatch {
+                width,
+                height,
+                expected,
+                actual,
+            } => {
+                write!(
+                    formatter,
+                    "texture {width}x{height} needs {expected} alpha values, got {actual}"
+                )
+            }
             Self::Image(error) => write!(formatter, "could not decode image: {error}"),
         }
     }
@@ -76,6 +100,17 @@ impl Error for TextureError {
 
 impl Texture {
     pub fn new(width: usize, height: usize, pixels: Vec<u32>) -> Result<Self, TextureError> {
+        let transparent = vec![false; pixels.len()];
+
+        Self::new_with_transparency(width, height, pixels, transparent)
+    }
+
+    pub fn new_with_transparency(
+        width: usize,
+        height: usize,
+        pixels: Vec<u32>,
+        transparent: Vec<bool>,
+    ) -> Result<Self, TextureError> {
         if width == 0 || height == 0 {
             return Err(TextureError::InvalidDimensions { width, height });
         }
@@ -98,10 +133,20 @@ impl Texture {
             });
         }
 
+        if transparent.len() != expected {
+            return Err(TextureError::TransparencyCountMismatch {
+                width,
+                height,
+                expected,
+                actual: transparent.len(),
+            });
+        }
+
         Ok(Self {
             width,
             height,
             pixels,
+            transparent,
         })
     }
 
@@ -109,12 +154,15 @@ impl Texture {
         let image = image::open(path).map_err(TextureError::Image)?.to_rgba8();
         let width = image.width() as usize;
         let height = image.height() as usize;
-        let pixels = image
-            .pixels()
-            .map(|pixel| rgb_to_u32(pixel[0], pixel[1], pixel[2]))
-            .collect();
+        let mut pixels = Vec::with_capacity(width * height);
+        let mut transparent = Vec::with_capacity(width * height);
 
-        Self::new(width, height, pixels)
+        for pixel in image.pixels() {
+            pixels.push(rgb_to_u32(pixel[0], pixel[1], pixel[2]));
+            transparent.push(pixel[3] < 128);
+        }
+
+        Self::new_with_transparency(width, height, pixels, transparent)
     }
 
     /// Devuelve el pixel en formato 0xRRGGBB. Las coordenadas fuera de rango
@@ -128,6 +176,17 @@ impl Texture {
         let clamped_y = y.min(self.height - 1);
 
         self.pixels[clamped_y * self.width + clamped_x]
+    }
+
+    pub fn is_transparent(&self, x: usize, y: usize) -> bool {
+        if self.width == 0 || self.height == 0 {
+            return false;
+        }
+
+        let clamped_x = x.min(self.width - 1);
+        let clamped_y = y.min(self.height - 1);
+
+        self.transparent[clamped_y * self.width + clamped_x]
     }
 
     pub fn sample(&self, u: f32, v: f32) -> u32 {
@@ -175,6 +234,7 @@ impl Texture {
                 FALLBACK_BLACK,
                 FALLBACK_MAGENTA,
             ],
+            transparent: vec![false; 4],
         }
     }
 }
@@ -255,6 +315,11 @@ pub struct TextureManager {
     textures: HashMap<char, Texture>,
     fallback: Texture,
     floor: Texture,
+    food: Texture,
+    ghost1: Texture,
+    ghost2: Texture,
+    ghost3: Texture,
+    scared_ghost: Texture,
 }
 
 impl TextureManager {
@@ -262,6 +327,11 @@ impl TextureManager {
         Self {
             textures,
             floor: fallback.clone(),
+            food: fallback.clone(),
+            ghost1: fallback.clone(),
+            ghost2: fallback.clone(),
+            ghost3: fallback.clone(),
+            scared_ghost: fallback.clone(),
             fallback,
         }
     }
@@ -273,8 +343,54 @@ impl TextureManager {
     ) -> Self {
         Self {
             textures,
+            floor,
+            food: fallback.clone(),
+            ghost1: fallback.clone(),
+            ghost2: fallback.clone(),
+            ghost3: fallback.clone(),
+            scared_ghost: fallback.clone(),
+            fallback,
+        }
+    }
+
+    pub fn new_with_floor_and_sprites(
+        textures: HashMap<char, Texture>,
+        fallback: Texture,
+        floor: Texture,
+        food: Texture,
+        ghost1: Texture,
+    ) -> Self {
+        let scared_ghost = ghost1.clone();
+        Self::new_with_floor_and_sprites_and_scared(
+            textures,
             fallback,
             floor,
+            food,
+            ghost1,
+            scared_ghost,
+        )
+    }
+
+    pub fn new_with_floor_and_sprites_and_scared(
+        textures: HashMap<char, Texture>,
+        fallback: Texture,
+        floor: Texture,
+        food: Texture,
+        ghost1: Texture,
+        scared_ghost: Texture,
+    ) -> Self {
+        let ghost2 = ghost1.clone();
+        let ghost3 = ghost1.clone();
+
+        Self {
+            textures,
+            fallback,
+            floor,
+            food,
+            ghost1,
+            ghost2,
+            ghost3,
+            scared_ghost,
         }
     }
 
@@ -289,11 +405,22 @@ impl TextureManager {
         }
 
         let floor = Texture::from_file(FLOOR_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+        let food = Texture::from_file(FOOD_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+        let ghost1 = Texture::from_file(GHOST_1_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+        let ghost2 = Texture::from_file(GHOST_2_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+        let ghost3 = Texture::from_file(GHOST_3_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+        let scared_ghost =
+            Texture::from_file(SCARED_GHOST_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
 
         Self {
             textures,
             fallback,
             floor,
+            food,
+            ghost1,
+            ghost2,
+            ghost3,
+            scared_ghost,
         }
     }
 
@@ -303,6 +430,16 @@ impl TextureManager {
 
     pub fn floor(&self) -> &Texture {
         &self.floor
+    }
+
+    pub fn sprite(&self, kind: SpriteKind, ghosts_scared: bool) -> &Texture {
+        match kind {
+            SpriteKind::Food => &self.food,
+            kind if ghosts_scared && kind.is_ghost() => &self.scared_ghost,
+            SpriteKind::Ghost1 => &self.ghost1,
+            SpriteKind::Ghost2 => &self.ghost2,
+            SpriteKind::Ghost3 => &self.ghost3,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -365,6 +502,17 @@ mod tests {
         )
     }
 
+    fn texture_manager_with_sprites_for_tests() -> TextureManager {
+        TextureManager::new_with_floor_and_sprites_and_scared(
+            HashMap::new(),
+            Texture::fallback(),
+            Texture::fallback(),
+            Texture::new(1, 1, vec![0xabcdef]).unwrap(),
+            Texture::new(1, 1, vec![0x123456]).unwrap(),
+            Texture::new(1, 1, vec![0xfedcba]).unwrap(),
+        )
+    }
+
     fn raycast_test_maze() -> Maze {
         vec![
             "#####".chars().collect(),
@@ -396,6 +544,11 @@ mod tests {
     }
 
     #[test]
+    fn rejects_wrong_transparency_count() {
+        assert!(Texture::new_with_transparency(2, 2, vec![0x000000; 4], vec![false; 3]).is_err());
+    }
+
+    #[test]
     fn gets_individual_pixels() {
         let texture = sample_texture();
 
@@ -412,6 +565,16 @@ mod tests {
         assert_eq!(texture.get_pixel(8, 0), 0x040506);
         assert_eq!(texture.get_pixel(0, 8), 0x070809);
         assert_eq!(texture.get_pixel(8, 8), 0x0a0b0c);
+    }
+
+    #[test]
+    fn tracks_transparent_pixels() {
+        let texture =
+            Texture::new_with_transparency(2, 1, vec![0x111111, 0x222222], vec![true, false])
+                .expect("transparent texture should be valid");
+
+        assert!(texture.is_transparent(0, 0));
+        assert!(!texture.is_transparent(1, 0));
     }
 
     #[test]
@@ -496,6 +659,59 @@ mod tests {
     }
 
     #[test]
+    fn loads_food_png_from_assets() {
+        let texture = Texture::from_file(FOOD_TEXTURE_PATH)
+            .expect("comida.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+        assert!(texture_has_transparency(&texture));
+    }
+
+    #[test]
+    fn loads_ghost_1_png_from_assets() {
+        let texture = Texture::from_file(GHOST_1_TEXTURE_PATH)
+            .expect("fantasma_1.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+        assert!(texture_has_transparency(&texture));
+    }
+
+    #[test]
+    fn loads_ghost_2_png_from_assets() {
+        let texture = Texture::from_file(GHOST_2_TEXTURE_PATH)
+            .expect("fantasma_2.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+    }
+
+    #[test]
+    fn loads_ghost_3_png_from_assets() {
+        let texture = Texture::from_file(GHOST_3_TEXTURE_PATH)
+            .expect("fantasma_3.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+    }
+
+    #[test]
+    fn loads_scared_ghost_png_from_assets() {
+        let texture = Texture::from_file(SCARED_GHOST_TEXTURE_PATH)
+            .expect("fantasma_asustado.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+        assert!(texture_has_transparency(&texture));
+    }
+
+    #[test]
     fn default_manager_maps_goal_wall_texture() {
         let manager = TextureManager::load_default();
 
@@ -508,6 +724,40 @@ mod tests {
         let manager = TextureManager::load_default();
 
         assert!(!std::ptr::eq(manager.floor(), &manager.fallback));
+    }
+
+    #[test]
+    fn default_manager_loads_sprite_textures() {
+        let manager = TextureManager::load_default();
+
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Food, false),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost1, false),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost2, false),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost3, false),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost1, true),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost2, true),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost3, true),
+            &manager.fallback
+        ));
     }
 
     #[test]
@@ -544,6 +794,44 @@ mod tests {
         let manager = texture_manager_with_floor_for_tests();
 
         assert_eq!(manager.floor().get_pixel(0, 0), 0x123456);
+    }
+
+    #[test]
+    fn texture_manager_returns_configured_sprite_textures() {
+        let manager = texture_manager_with_sprites_for_tests();
+
+        assert_eq!(
+            manager.sprite(SpriteKind::Food, false).get_pixel(0, 0),
+            0xabcdef
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost1, false).get_pixel(0, 0),
+            0x123456
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost1, true).get_pixel(0, 0),
+            0xfedcba
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost2, false).get_pixel(0, 0),
+            0x123456
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost3, false).get_pixel(0, 0),
+            0x123456
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost2, true).get_pixel(0, 0),
+            0xfedcba
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost3, true).get_pixel(0, 0),
+            0xfedcba
+        );
+    }
+
+    fn texture_has_transparency(texture: &Texture) -> bool {
+        (0..texture.height).any(|y| (0..texture.width).any(|x| texture.is_transparent(x, y)))
     }
 
     #[test]

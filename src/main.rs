@@ -7,6 +7,7 @@ mod line;
 mod maze;
 mod player;
 mod render;
+mod sprite;
 pub mod texture;
 
 use caster::cast_fov_2d;
@@ -18,9 +19,10 @@ use maze::{Maze, find_char, load_maze, validate_maze};
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
 use render::{
-    maze_offset, render_3d, render_fps_overlay, render_maze, render_minimap, render_pause_menu,
-    render_player, render_victory_screen, render_welcome_screen,
+    maze_offset, render_3d_with_sprites, render_fps_overlay, render_loss_screen, render_maze,
+    render_minimap, render_pause_menu, render_player, render_victory_screen, render_welcome_screen,
 };
+use sprite::{SpriteState, SpriteUpdate};
 use std::time::Instant;
 use texture::TextureManager;
 
@@ -205,6 +207,17 @@ fn victory_option_at(index: usize, current_level: usize, level_count: usize) -> 
     }
 }
 
+fn reset_level_state(
+    player: &mut Player,
+    sprite_state: &mut SpriteState,
+    level_index: usize,
+    player_start: (usize, usize),
+    block_size: usize,
+) {
+    reset_player(player, player_start, block_size);
+    sprite_state.reset_for_level(level_index, block_size);
+}
+
 fn main() -> Result<(), minifb::Error> {
     let levels = load_levels(&LEVEL_PATHS);
     let mut selected_level_index = 0;
@@ -213,6 +226,7 @@ fn main() -> Result<(), minifb::Error> {
         levels[selected_level_index].player_start.1,
         BLOCK_SIZE,
     );
+    let mut sprite_state = SpriteState::for_level(selected_level_index, BLOCK_SIZE);
 
     println!(
         "Player world position: ({:.1}, {:.1})",
@@ -292,8 +306,10 @@ fn main() -> Result<(), minifb::Error> {
                 }
 
                 if selected_level_index != previous_level {
-                    reset_player(
+                    reset_level_state(
                         &mut player,
+                        &mut sprite_state,
+                        selected_level_index,
                         levels[selected_level_index].player_start,
                         BLOCK_SIZE,
                     );
@@ -303,8 +319,10 @@ fn main() -> Result<(), minifb::Error> {
                 if window.is_key_pressed(Key::Enter, KeyRepeat::No) || gamepad.confirm_pressed() {
                     match welcome_menu_option {
                         WelcomeMenuOption::Start => {
-                            reset_player(
+                            reset_level_state(
                                 &mut player,
+                                &mut sprite_state,
+                                selected_level_index,
                                 levels[selected_level_index].player_start,
                                 BLOCK_SIZE,
                             );
@@ -313,8 +331,10 @@ fn main() -> Result<(), minifb::Error> {
                         WelcomeMenuOption::ChangeLevel => {
                             selected_level_index =
                                 next_level_index(selected_level_index, levels.len());
-                            reset_player(
+                            reset_level_state(
                                 &mut player,
+                                &mut sprite_state,
+                                selected_level_index,
                                 levels[selected_level_index].player_start,
                                 BLOCK_SIZE,
                             );
@@ -345,12 +365,21 @@ fn main() -> Result<(), minifb::Error> {
                         delta_time,
                         &gamepad,
                     );
+                    if sprite_state.update(&player, &current_level.maze, BLOCK_SIZE, delta_time)
+                        == SpriteUpdate::PlayerCaught
+                    {
+                        game_state = GameState::Lost;
+                        mouse_look.reset();
+                    }
 
-                    if player_reached_goal(&current_level.maze, &player, BLOCK_SIZE) {
+                    if game_state == GameState::Playing
+                        && player_reached_goal(&current_level.maze, &player, BLOCK_SIZE)
+                    {
                         game_state = GameState::Won;
                         victory_menu_index = 0;
-                    } else if window.is_key_pressed(Key::Tab, KeyRepeat::No)
-                        || gamepad.toggle_view_pressed()
+                    } else if game_state == GameState::Playing
+                        && (window.is_key_pressed(Key::Tab, KeyRepeat::No)
+                            || gamepad.toggle_view_pressed())
                     {
                         render_mode = render_mode.toggle();
                     }
@@ -401,8 +430,10 @@ fn main() -> Result<(), minifb::Error> {
                             }
                             PauseMenuOption::ChangeLevel => {
                                 selected_level_index = pause_level_index;
-                                reset_player(
+                                reset_level_state(
                                     &mut player,
+                                    &mut sprite_state,
+                                    selected_level_index,
                                     levels[selected_level_index].player_start,
                                     BLOCK_SIZE,
                                 );
@@ -410,8 +441,10 @@ fn main() -> Result<(), minifb::Error> {
                                 game_state = GameState::Playing;
                             }
                             PauseMenuOption::MainMenu => {
-                                reset_player(
+                                reset_level_state(
                                     &mut player,
+                                    &mut sprite_state,
+                                    selected_level_index,
                                     levels[selected_level_index].player_start,
                                     BLOCK_SIZE,
                                 );
@@ -442,8 +475,10 @@ fn main() -> Result<(), minifb::Error> {
                 }
 
                 if window.is_key_pressed(Key::R, KeyRepeat::No) {
-                    reset_player(
+                    reset_level_state(
                         &mut player,
+                        &mut sprite_state,
+                        selected_level_index,
                         levels[selected_level_index].player_start,
                         BLOCK_SIZE,
                     );
@@ -454,8 +489,10 @@ fn main() -> Result<(), minifb::Error> {
                     match victory_option_at(victory_menu_index, selected_level_index, levels.len())
                     {
                         VictoryMenuOption::Restart => {
-                            reset_player(
+                            reset_level_state(
                                 &mut player,
+                                &mut sprite_state,
+                                selected_level_index,
                                 levels[selected_level_index].player_start,
                                 BLOCK_SIZE,
                             );
@@ -463,8 +500,10 @@ fn main() -> Result<(), minifb::Error> {
                         }
                         VictoryMenuOption::NextLevel => {
                             selected_level_index += 1;
-                            reset_player(
+                            reset_level_state(
                                 &mut player,
+                                &mut sprite_state,
+                                selected_level_index,
                                 levels[selected_level_index].player_start,
                                 BLOCK_SIZE,
                             );
@@ -472,8 +511,10 @@ fn main() -> Result<(), minifb::Error> {
                             game_state = GameState::Playing;
                         }
                         VictoryMenuOption::MainMenu => {
-                            reset_player(
+                            reset_level_state(
                                 &mut player,
+                                &mut sprite_state,
+                                selected_level_index,
                                 levels[selected_level_index].player_start,
                                 BLOCK_SIZE,
                             );
@@ -481,6 +522,24 @@ fn main() -> Result<(), minifb::Error> {
                             game_state = GameState::Welcome;
                         }
                     }
+                }
+
+                mouse_look.reset();
+            }
+            GameState::Lost => {
+                if window.is_key_pressed(Key::R, KeyRepeat::No)
+                    || window.is_key_pressed(Key::Enter, KeyRepeat::No)
+                    || gamepad.confirm_pressed()
+                {
+                    reset_level_state(
+                        &mut player,
+                        &mut sprite_state,
+                        selected_level_index,
+                        levels[selected_level_index].player_start,
+                        BLOCK_SIZE,
+                    );
+                    render_mode = RenderMode::Mode3D;
+                    game_state = GameState::Playing;
                 }
 
                 mouse_look.reset();
@@ -517,12 +576,14 @@ fn main() -> Result<(), minifb::Error> {
                     render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
                 }
                 RenderMode::Mode3D => {
-                    render_3d(
+                    render_3d_with_sprites(
                         &mut framebuffer,
                         &current_level.maze,
                         &player,
                         BLOCK_SIZE,
                         &textures,
+                        &sprite_state.sprites,
+                        sprite_state.has_food_power(),
                     );
                     render_minimap(&mut framebuffer, &current_level.maze, &player, BLOCK_SIZE);
                 }
@@ -543,6 +604,14 @@ fn main() -> Result<(), minifb::Error> {
                     selected_level_index,
                     levels.len(),
                     victory_menu_index,
+                );
+            }
+            GameState::Lost => {
+                render_loss_screen(
+                    &mut framebuffer,
+                    &current_level.maze,
+                    selected_level_index,
+                    levels.len(),
                 );
             }
         }
@@ -618,5 +687,20 @@ mod tests {
         assert_eq!(PauseMenuOption::at(0), PauseMenuOption::Continue);
         assert_eq!(PauseMenuOption::at(1), PauseMenuOption::ChangeLevel);
         assert_eq!(PauseMenuOption::at(2), PauseMenuOption::MainMenu);
+    }
+
+    #[test]
+    fn reset_level_state_resets_player_and_sprites() {
+        let mut player = Player::new(7, 5, BLOCK_SIZE);
+        let mut sprite_state = SpriteState::for_level(0, BLOCK_SIZE);
+        sprite_state.food_power_timer = 5.0;
+        sprite_state.sprites[0].active = false;
+
+        reset_level_state(&mut player, &mut sprite_state, 0, (1, 1), BLOCK_SIZE);
+
+        assert_eq!(player.pos.x, 60.0);
+        assert_eq!(player.pos.y, 60.0);
+        assert_eq!(sprite_state.food_power_timer, 0.0);
+        assert!(sprite_state.sprites.iter().all(|sprite| sprite.active));
     }
 }

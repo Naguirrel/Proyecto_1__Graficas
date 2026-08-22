@@ -7,6 +7,7 @@ pub enum GameState {
     Playing,
     Paused,
     Won,
+    Lost,
 }
 
 pub fn player_reached_goal(maze: &Maze, player: &Player, block_size: usize) -> bool {
