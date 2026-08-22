@@ -34,19 +34,37 @@ desde archivos `.txt`, permite escoger entre tres niveles, recorrerlos en vista
 - Musica de fondo en loop durante cada nivel.
 - Musica temporal de poder durante 30 segundos al recoger comida.
 
-## Rubrica cumplida hasta el momento
+## Auditoria contra la rubrica
 
-| Criterio | Puntos |
-| --- | ---: |
-| Multiple Hardware: soporte a mando/control | 20 pts |
-| Estetica | 30 pts |
-| 15 FPS estables | 15 pts |
-| Camara con movimiento por mouse | 30 pts |
-| Minimapa | 10 pts |
-| Pantalla de bienvenida con seleccion de niveles | 15 pts |
-| Pantalla de exito | 10 pts |
-| Musica de fondo | 5 pts |
-| **Total cumplido hasta el momento** | **135 pts antes del limite de 100** |
+La siguiente tabla compara la rubrica entregada para el proyecto con la
+implementacion actual. El puntaje final lo decide el docente y tiene un maximo
+de 100 puntos; por eso no se deben sumar los puntos de la tabla como si fueran
+un resultado final.
+
+| Criterio de la rubrica | Maximo | Evidencia en el proyecto | Estado |
+| --- | ---: | --- | --- |
+| Multiple hardware: soporte a mando/control | 20 | `src/gamepad.rs` usa `gilrs` para gamepads y el juego integra movimiento, menus, salto y cambio de vista. | Cumplido |
+| Estetica del nivel | 30 | Pantallas tematicas, colores, texturas de paredes, piso, comida y fantasmas. La valoracion es subjetiva. | Implementado; sujeto a evaluacion |
+| Mantener al menos 15 FPS | 15 | FPS visible en pantalla y benchmark de renderizado en `src/render.rs`. Debe validarse durante la demostracion en el equipo objetivo. | Instrumentado; validar en ejecucion |
+| Camara con movimiento hacia adelante/atras y rotacion | 20 | `src/input.rs` implementa avance, retroceso y rotacion con teclado y mando; el raycaster usa la posicion y el angulo del jugador. | Cumplido |
+| Movimiento horizontal de camara con mouse | 10 | `MouseLook` lee el delta horizontal del mouse y modifica el angulo del jugador. | Cumplido |
+| Minimapa en una esquina | 10 | `render_minimap` lo dibuja en la esquina inferior derecha durante la vista 3D. | Cumplido |
+| Musica de fondo | 5 | `src/audio.rs` reproduce en loop `assets/audios/cfondo.mp3`. | Cumplido |
+| Extra por musica de Taylor Swift | 5 | Existe `assets/audios/poder_ts.mp3`, pero el contenido del MP3 no puede verificarse desde el codigo. | Pendiente de confirmar |
+| Efectos de sonido | 10 | Solo se encontraron pistas de musica; no hay reproduccion de efectos asociada a eventos del juego. | No implementado |
+| Al menos una animacion de sprite | 20 | Hay sprites de comida y fantasmas; los fantasmas se mueven y tienen variantes visuales, pero no hay cambio de cuadros por tiempo. | Parcial; validar con el docente |
+| Pantalla de bienvenida | 5 | `render_welcome_screen` muestra el menu inicial y permite iniciar o salir. | Cumplido |
+| Seleccion de multiples niveles | 10 | Se cargan `maze.txt`, `maze_2.txt` y `maze_3.txt`, y se pueden seleccionar desde el menu. | Cumplido |
+| Pantalla de exito | 10 | `render_victory_screen` muestra `GANASTE` y permite reiniciar, avanzar o volver al menu. | Cumplido |
+
+### Resultado de la auditoria
+
+Hay evidencia directa de los criterios de control, estetica, rendimiento
+instrumentado, camara, mouse, minimapa, musica, bienvenida, multiples niveles
+y victoria. Los pendientes antes de entregar son los efectos de sonido, una
+animacion de sprite por cuadros y confirmar si `poder_ts.mp3` cumple el extra de
+Taylor Swift. La suma aritmetica de los maximos no representa la nota final,
+porque la rubrica indica que no hay puntos extra y que la nota se limita a 100.
 
 ## Ejecutar
 
@@ -163,8 +181,8 @@ assets/
 ├── wall4.png
 ├── wall5.png
 └── audios/
-    ├── C fondo.mp3
-    └── poder TS.mp3
+    ├── cfondo.mp3
+    └── poder_ts.mp3
 ```
 
 Mapeo preparado:
@@ -182,8 +200,8 @@ Mapeo preparado:
 
 El juego busca audios MP3 dentro de `assets/audios/`.
 
-- La musica de fondo usa el archivo cuyo nombre contiene `C fondo`.
-- La musica de poder usa el archivo cuyo nombre termina en `TS.mp3`.
+- La musica de fondo usa el archivo cuyo nombre contiene `c` y `fondo`.
+- La musica de poder usa el archivo cuyo nombre termina en `ts.mp3`.
 - La musica de fondo se repite mientras se juega un nivel.
 - Al recoger comida, la musica de poder reemplaza la de fondo durante los 30
   segundos del poder. Al terminar el poder, vuelve la musica de fondo.
