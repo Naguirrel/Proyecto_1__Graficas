@@ -1,10 +1,11 @@
 use crate::framebuffer::Framebuffer;
 use crate::line::line;
-use crate::maze::{Maze, cell_at_world_position};
+use crate::maze::Maze;
 use crate::player::Player;
 
 const RAY_COLOR: u32 = 0xff0000;
 const STEP_SIZE: f32 = 1.0;
+const RAY_AXIS_EPSILON: f32 = 0.000001;
 pub const NUM_RAYS_2D: usize = 60;
 
 #[derive(Debug, Clone, Copy)]
@@ -34,20 +35,74 @@ pub fn cast_ray(
     offset_y: usize,
     draw_line: bool,
 ) -> Intersect {
+    if block_size == 0 || !player.pos.x.is_finite() || !player.pos.y.is_finite() {
+        return Intersect {
+            distance: 0.0,
+            impact: '#',
+            hit_x: player.pos.x,
+            hit_y: player.pos.y,
+            side: WallSide::Vertical,
+        };
+    }
+
     let ray_cos = angle.cos();
     let ray_sin = angle.sin();
     let max_distance = max_ray_distance(maze, block_size);
+    let block_size_f = block_size as f32;
+    let mut map_x = (player.pos.x / block_size_f).floor() as isize;
+    let mut map_y = (player.pos.y / block_size_f).floor() as isize;
 
-    let mut distance = 0.0;
-    let mut ray_x = player.pos.x;
-    let mut ray_y = player.pos.y;
+    let step_x = if ray_cos > RAY_AXIS_EPSILON {
+        1
+    } else if ray_cos < -RAY_AXIS_EPSILON {
+        -1
+    } else {
+        0
+    };
+    let step_y = if ray_sin > RAY_AXIS_EPSILON {
+        1
+    } else if ray_sin < -RAY_AXIS_EPSILON {
+        -1
+    } else {
+        0
+    };
 
-    while distance <= max_distance {
-        distance += STEP_SIZE;
-        ray_x = player.pos.x + distance * ray_cos;
-        ray_y = player.pos.y + distance * ray_sin;
+    let mut side_distance_x = first_side_distance(
+        player.pos.x,
+        ray_cos,
+        map_x,
+        block_size_f,
+        step_x,
+    );
+    let mut side_distance_y = first_side_distance(
+        player.pos.y,
+        ray_sin,
+        map_y,
+        block_size_f,
+        step_y,
+    );
+    let delta_distance_x = axis_delta_distance(ray_cos, block_size_f, step_x);
+    let delta_distance_y = axis_delta_distance(ray_sin, block_size_f, step_y);
 
-        match cell_at_world_position(maze, ray_x, ray_y, block_size) {
+    while side_distance_x.min(side_distance_y) <= max_distance {
+        let (distance, side) = if side_distance_x <= side_distance_y {
+            let distance = side_distance_x;
+            side_distance_x += delta_distance_x;
+            map_x += step_x;
+
+            (distance, WallSide::Vertical)
+        } else {
+            let distance = side_distance_y;
+            side_distance_y += delta_distance_y;
+            map_y += step_y;
+
+            (distance, WallSide::Horizontal)
+        };
+
+        let ray_x = player.pos.x + distance * ray_cos;
+        let ray_y = player.pos.y + distance * ray_sin;
+
+        match cell_at_grid_position(maze, map_x, map_y) {
             Some(' ' | 'p' | 'g') => {}
             Some(impact) => {
                 draw_ray_line(
@@ -65,7 +120,7 @@ pub fn cast_ray(
                     impact,
                     hit_x: ray_x,
                     hit_y: ray_y,
-                    side: wall_side_at_hit(ray_x, ray_y, block_size),
+                    side,
                 };
             }
             None => {
@@ -84,11 +139,15 @@ pub fn cast_ray(
                     impact: '#',
                     hit_x: ray_x,
                     hit_y: ray_y,
-                    side: wall_side_at_hit(ray_x, ray_y, block_size),
+                    side,
                 };
             }
         }
     }
+
+    let distance = max_distance;
+    let ray_x = player.pos.x + distance * ray_cos;
+    let ray_y = player.pos.y + distance * ray_sin;
 
     draw_ray_line(
         framebuffer,
@@ -105,7 +164,7 @@ pub fn cast_ray(
         impact: '#',
         hit_x: ray_x,
         hit_y: ray_y,
-        side: wall_side_at_hit(ray_x, ray_y, block_size),
+        side: WallSide::Vertical,
     }
 }
 
@@ -148,6 +207,38 @@ fn max_ray_distance(maze: &Maze, block_size: usize) -> f32 {
     let maze_height = maze.len() * block_size;
 
     ((maze_width * maze_width + maze_height * maze_height) as f32).sqrt()
+}
+
+fn first_side_distance(
+    position: f32,
+    ray_direction: f32,
+    map_position: isize,
+    block_size: f32,
+    step: isize,
+) -> f32 {
+    match step {
+        1 => (((map_position + 1) as f32 * block_size) - position) / ray_direction,
+        -1 => (position - map_position as f32 * block_size) / -ray_direction,
+        _ => f32::INFINITY,
+    }
+}
+
+fn axis_delta_distance(ray_direction: f32, block_size: f32, step: isize) -> f32 {
+    if step == 0 {
+        f32::INFINITY
+    } else {
+        block_size / ray_direction.abs()
+    }
+}
+
+fn cell_at_grid_position(maze: &Maze, column: isize, row: isize) -> Option<char> {
+    if column < 0 || row < 0 {
+        return None;
+    }
+
+    maze.get(row as usize)
+        .and_then(|maze_row| maze_row.get(column as usize))
+        .copied()
 }
 
 fn wall_side_at_hit(hit_x: f32, hit_y: f32, block_size: usize) -> WallSide {
