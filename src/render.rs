@@ -3,7 +3,7 @@ use crate::framebuffer::Framebuffer;
 use crate::line::{line, line_with_shader};
 use crate::maze::Maze;
 use crate::player::Player;
-use crate::texture::{TextureManager, texture_u_from_hit, texture_v_for_stake};
+use crate::texture::{Texture, TextureManager, texture_u_from_hit, texture_v_for_stake};
 
 const WALL_COLOR: u32 = 0x3b82f6;
 const WALL_PLUS_COLOR: u32 = 0xef4444;
@@ -47,6 +47,8 @@ const DIRECTION_LENGTH: f32 = 30.0;
 const JUMP_VISUAL_SCALE: f32 = 1.0;
 const GLYPH_WIDTH: isize = 5;
 const GLYPH_HEIGHT: isize = 7;
+const CEILING_TEXTURE_WALL: char = '#';
+const HORIZON_EPSILON: f32 = 0.0001;
 
 pub fn render_maze(framebuffer: &mut Framebuffer, maze: &Maze, block_size: usize) {
     if maze.is_empty() || block_size == 0 {
@@ -116,7 +118,14 @@ pub fn render_3d(
     let screen_center = framebuffer.height as f32 / 2.0 + player.height * JUMP_VISUAL_SCALE;
     let last_column = framebuffer.width.saturating_sub(1);
 
-    render_3d_background(framebuffer);
+    render_3d_background(
+        framebuffer,
+        player,
+        block_size,
+        projection_plane,
+        screen_center,
+        textures.get(CEILING_TEXTURE_WALL),
+    );
 
     for x in 0..framebuffer.width {
         let fraction = if framebuffer.width == 1 {
@@ -593,22 +602,76 @@ fn minimap_cell_color(cell: char) -> u32 {
     }
 }
 
-fn render_3d_background(framebuffer: &mut Framebuffer) {
-    let half_height = framebuffer.height / 2;
+fn render_3d_background(
+    framebuffer: &mut Framebuffer,
+    player: &Player,
+    block_size: usize,
+    projection_plane: f32,
+    screen_center: f32,
+    ceiling_texture: &Texture,
+) {
+    let horizon = screen_center.clamp(0.0, framebuffer.height as f32);
+    let ceiling_bottom = horizon.floor() as usize;
 
-    framebuffer.set_current_color(CEILING_COLOR);
-    for y in 0..half_height {
+    for y in 0..ceiling_bottom {
         for x in 0..framebuffer.width {
+            let color = ceiling_pixel_color(
+                player,
+                block_size,
+                projection_plane,
+                screen_center,
+                x,
+                y,
+                framebuffer.width,
+                ceiling_texture,
+            );
+
+            framebuffer.set_current_color(color);
             framebuffer.point(x as isize, y as isize);
         }
     }
 
     framebuffer.set_current_color(FLOOR_COLOR);
-    for y in half_height..framebuffer.height {
+    for y in ceiling_bottom..framebuffer.height {
         for x in 0..framebuffer.width {
             framebuffer.point(x as isize, y as isize);
         }
     }
+}
+
+fn ceiling_pixel_color(
+    player: &Player,
+    block_size: usize,
+    projection_plane: f32,
+    screen_center: f32,
+    screen_x: usize,
+    screen_y: usize,
+    screen_width: usize,
+    texture: &Texture,
+) -> u32 {
+    if block_size == 0 || !projection_plane.is_finite() || !screen_center.is_finite() {
+        return CEILING_COLOR;
+    }
+
+    let row_offset = screen_center - screen_y as f32;
+    if row_offset <= HORIZON_EPSILON {
+        return CEILING_COLOR;
+    }
+
+    let fraction = if screen_width == 1 {
+        0.5
+    } else {
+        screen_x as f32 / screen_width.saturating_sub(1) as f32
+    };
+    let ray_angle = player.a - player.fov / 2.0 + fraction * player.fov;
+    let angle_correction = (ray_angle - player.a).cos().abs().max(HORIZON_EPSILON);
+    let distance = block_size as f32 * projection_plane / row_offset / angle_correction;
+    let world_x = player.pos.x + ray_angle.cos() * distance;
+    let world_y = player.pos.y + ray_angle.sin() * distance;
+    let u = world_x.rem_euclid(block_size as f32) / block_size as f32;
+    let v = world_y.rem_euclid(block_size as f32) / block_size as f32;
+
+    texture.sample(u, v)
 }
 
 fn distance_to_projection_plane(screen_width: usize, fov: f32) -> f32 {
@@ -962,8 +1025,6 @@ mod tests {
     use std::collections::HashMap;
     use std::f32::consts::PI;
 
-    use crate::texture::Texture;
-
     use super::*;
 
     fn solid_texture(color: u32) -> Texture {
@@ -1052,6 +1113,19 @@ mod tests {
         render_3d(&mut framebuffer, &maze, &player, 10, &textures);
 
         assert!(framebuffer_contains(&framebuffer, 0x123456));
+    }
+
+    #[test]
+    fn render_3d_draws_ceiling_from_wall1_texture_slot() {
+        let maze = render_test_maze();
+        let mut player = Player::new(2, 2, 10);
+        player.a = 0.0;
+        let mut framebuffer = Framebuffer::new(80, 60);
+        let textures = texture_manager_for_render_tests([('#', 0x445566), ('+', 0x123456)]);
+
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+
+        assert_eq!(framebuffer.buffer[0], 0x445566);
     }
 
     #[test]
