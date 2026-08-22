@@ -3,7 +3,7 @@ use crate::framebuffer::Framebuffer;
 use crate::line::{line, line_with_shader};
 use crate::maze::Maze;
 use crate::player::Player;
-use crate::texture::{TextureManager, texture_x_from_hit, texture_y_for_stake};
+use crate::texture::{TextureManager, texture_u_from_hit, texture_v_for_stake};
 
 const WALL_COLOR: u32 = 0x3b82f6;
 const WALL_PLUS_COLOR: u32 = 0xef4444;
@@ -146,12 +146,11 @@ pub fn render_3d(
             .min((framebuffer.height - 1) as f32)
             .round() as isize;
         let texture = textures.get(intersection.impact);
-        let tx = texture_x_from_hit(
+        let u = texture_u_from_hit(
             intersection.hit_x,
             intersection.hit_y,
             intersection.side,
             block_size,
-            texture.width,
         );
 
         line_with_shader(
@@ -161,14 +160,9 @@ pub fn render_3d(
             x as isize,
             clipped_bottom,
             |_, pixel_y| {
-                let ty = texture_y_for_stake(
-                    pixel_y,
-                    unclipped_stake_top,
-                    unclipped_stake_bottom,
-                    texture.height,
-                );
+                let v = texture_v_for_stake(pixel_y, unclipped_stake_top, unclipped_stake_bottom);
 
-                texture.get_pixel(tx, ty)
+                texture.sample(u, v)
             },
         );
     }
@@ -987,6 +981,12 @@ mod tests {
         TextureManager::new(textures, Texture::fallback())
     }
 
+    fn texture_manager_from_textures(
+        textures: impl IntoIterator<Item = (char, Texture)>,
+    ) -> TextureManager {
+        TextureManager::new(textures.into_iter().collect(), Texture::fallback())
+    }
+
     fn render_test_maze() -> Maze {
         vec![
             "#####".chars().collect(),
@@ -1088,6 +1088,25 @@ mod tests {
         render_3d(&mut framebuffer, &maze, &player, 10, &textures);
 
         assert!(framebuffer_contains(&framebuffer, 0x334455));
+    }
+
+    #[test]
+    fn render_3d_uses_filtered_texture_samples() {
+        let maze = vec![
+            "###".chars().collect(),
+            "#p#".chars().collect(),
+            "###".chars().collect(),
+        ];
+        let mut player = Player::new(1, 1, 10);
+        player.a = 0.0;
+        let mut framebuffer = Framebuffer::new(1, 20);
+        let gradient =
+            Texture::new(2, 1, vec![0x000000, 0xffffff]).expect("test texture should be valid");
+        let textures = texture_manager_from_textures([('#', gradient)]);
+
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+
+        assert!(framebuffer_contains(&framebuffer, 0x808080));
     }
 
     #[test]
