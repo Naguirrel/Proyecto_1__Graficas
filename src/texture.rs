@@ -13,6 +13,7 @@ const DEFAULT_TEXTURE_PATHS: [(char, &str); 6] = [
     ('&', "assets/wall5.png"),
     ('!', "assets/wall5.png"),
 ];
+const FLOOR_TEXTURE_PATH: &str = "assets/piso.png";
 
 const FALLBACK_MAGENTA: u32 = 0xff00ff;
 const FALLBACK_BLACK: u32 = 0x000000;
@@ -242,11 +243,28 @@ pub fn texture_v_for_stake(
 pub struct TextureManager {
     textures: HashMap<char, Texture>,
     fallback: Texture,
+    floor: Texture,
 }
 
 impl TextureManager {
     pub fn new(textures: HashMap<char, Texture>, fallback: Texture) -> Self {
-        Self { textures, fallback }
+        Self {
+            textures,
+            floor: fallback.clone(),
+            fallback,
+        }
+    }
+
+    pub fn new_with_floor(
+        textures: HashMap<char, Texture>,
+        fallback: Texture,
+        floor: Texture,
+    ) -> Self {
+        Self {
+            textures,
+            fallback,
+            floor,
+        }
     }
 
     pub fn load_default() -> Self {
@@ -259,11 +277,21 @@ impl TextureManager {
             }
         }
 
-        Self { textures, fallback }
+        let floor = Texture::from_file(FLOOR_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+
+        Self {
+            textures,
+            fallback,
+            floor,
+        }
     }
 
     pub fn get(&self, wall: char) -> &Texture {
         self.textures.get(&wall).unwrap_or(&self.fallback)
+    }
+
+    pub fn floor(&self) -> &Texture {
+        &self.floor
     }
 
     pub fn len(&self) -> usize {
@@ -316,6 +344,14 @@ mod tests {
         textures.insert('!', Texture::new(1, 1, vec![0x666666]).unwrap());
 
         TextureManager::new(textures, Texture::fallback())
+    }
+
+    fn texture_manager_with_floor_for_tests() -> TextureManager {
+        TextureManager::new_with_floor(
+            HashMap::new(),
+            Texture::fallback(),
+            Texture::new(1, 1, vec![0x123456]).unwrap(),
+        )
     }
 
     fn raycast_test_maze() -> Maze {
@@ -428,11 +464,28 @@ mod tests {
     }
 
     #[test]
+    fn loads_floor_png_from_assets() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/piso.png");
+        let texture = Texture::from_file(path).expect("piso.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+    }
+
+    #[test]
     fn default_manager_maps_goal_wall_texture() {
         let manager = TextureManager::load_default();
 
         assert!(!std::ptr::eq(manager.get('!'), &manager.fallback));
         assert!(!std::ptr::eq(manager.get('&'), &manager.fallback));
+    }
+
+    #[test]
+    fn default_manager_loads_floor_texture() {
+        let manager = TextureManager::load_default();
+
+        assert!(!std::ptr::eq(manager.floor(), &manager.fallback));
     }
 
     #[test]
@@ -462,6 +515,13 @@ mod tests {
 
         assert!(std::ptr::eq(manager.get('#'), stored_texture));
         assert!(std::ptr::eq(manager.get('#'), manager.get('#')));
+    }
+
+    #[test]
+    fn texture_manager_returns_configured_floor_texture() {
+        let manager = texture_manager_with_floor_for_tests();
+
+        assert_eq!(manager.floor().get_pixel(0, 0), 0x123456);
     }
 
     #[test]

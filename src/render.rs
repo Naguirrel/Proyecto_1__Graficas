@@ -47,7 +47,6 @@ const DIRECTION_LENGTH: f32 = 30.0;
 const JUMP_VISUAL_SCALE: f32 = 1.0;
 const GLYPH_WIDTH: isize = 5;
 const GLYPH_HEIGHT: isize = 7;
-const CEILING_TEXTURE_WALL: char = '#';
 const HORIZON_EPSILON: f32 = 0.0001;
 
 pub fn render_maze(framebuffer: &mut Framebuffer, maze: &Maze, block_size: usize) {
@@ -124,7 +123,7 @@ pub fn render_3d(
         block_size,
         projection_plane,
         screen_center,
-        textures.get(CEILING_TEXTURE_WALL),
+        textures.floor(),
     );
 
     for x in 0..framebuffer.width {
@@ -608,14 +607,21 @@ fn render_3d_background(
     block_size: usize,
     projection_plane: f32,
     screen_center: f32,
-    ceiling_texture: &Texture,
+    floor_texture: &Texture,
 ) {
     let horizon = screen_center.clamp(0.0, framebuffer.height as f32);
-    let ceiling_bottom = horizon.floor() as usize;
+    let floor_top = horizon.floor() as usize;
 
-    for y in 0..ceiling_bottom {
+    framebuffer.set_current_color(CEILING_COLOR);
+    for y in 0..floor_top {
         for x in 0..framebuffer.width {
-            let color = ceiling_pixel_color(
+            framebuffer.point(x as isize, y as isize);
+        }
+    }
+
+    for y in floor_top..framebuffer.height {
+        for x in 0..framebuffer.width {
+            let color = floor_pixel_color(
                 player,
                 block_size,
                 projection_plane,
@@ -623,23 +629,16 @@ fn render_3d_background(
                 x,
                 y,
                 framebuffer.width,
-                ceiling_texture,
+                floor_texture,
             );
 
             framebuffer.set_current_color(color);
             framebuffer.point(x as isize, y as isize);
         }
     }
-
-    framebuffer.set_current_color(FLOOR_COLOR);
-    for y in ceiling_bottom..framebuffer.height {
-        for x in 0..framebuffer.width {
-            framebuffer.point(x as isize, y as isize);
-        }
-    }
 }
 
-fn ceiling_pixel_color(
+fn floor_pixel_color(
     player: &Player,
     block_size: usize,
     projection_plane: f32,
@@ -650,12 +649,12 @@ fn ceiling_pixel_color(
     texture: &Texture,
 ) -> u32 {
     if block_size == 0 || !projection_plane.is_finite() || !screen_center.is_finite() {
-        return CEILING_COLOR;
+        return FLOOR_COLOR;
     }
 
-    let row_offset = screen_center - screen_y as f32;
+    let row_offset = screen_y as f32 - screen_center;
     if row_offset <= HORIZON_EPSILON {
-        return CEILING_COLOR;
+        return FLOOR_COLOR;
     }
 
     let fraction = if screen_width == 1 {
@@ -1116,7 +1115,7 @@ mod tests {
     }
 
     #[test]
-    fn render_3d_draws_ceiling_from_wall1_texture_slot() {
+    fn render_3d_keeps_ceiling_solid() {
         let maze = render_test_maze();
         let mut player = Player::new(2, 2, 10);
         player.a = 0.0;
@@ -1125,7 +1124,26 @@ mod tests {
 
         render_3d(&mut framebuffer, &maze, &player, 10, &textures);
 
-        assert_eq!(framebuffer.buffer[0], 0x445566);
+        assert_eq!(framebuffer.buffer[0], CEILING_COLOR);
+    }
+
+    #[test]
+    fn render_3d_draws_floor_from_floor_texture() {
+        let maze = render_test_maze();
+        let mut player = Player::new(2, 2, 10);
+        player.a = 0.0;
+        let mut framebuffer = Framebuffer::new(80, 60);
+        let mut wall_textures = HashMap::new();
+        wall_textures.insert('+', solid_texture(0x123456));
+        let textures = TextureManager::new_with_floor(
+            wall_textures,
+            Texture::fallback(),
+            solid_texture(0x445566),
+        );
+
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+
+        assert_eq!(framebuffer.buffer[framebuffer.buffer.len() - 1], 0x445566);
     }
 
     #[test]
