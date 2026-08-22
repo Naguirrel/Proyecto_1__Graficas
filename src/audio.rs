@@ -102,17 +102,23 @@ impl AudioManager {
             return;
         }
 
-        self.stop();
-
-        let Some(output) = &self.output else {
+        if self.output.is_none() {
             return;
-        };
-        let Some(path) = self.tracks.path_for(track) else {
+        }
+
+        let Some(path) = self.tracks.path_for(track).map(Path::to_path_buf) else {
             self.warn_missing_track(track);
+            if track == MusicTrack::Background || self.active_track != Some(MusicTrack::Background)
+            {
+                self.stop();
+            }
             return;
         };
 
-        match looped_player(output, path) {
+        self.stop();
+        let output = self.output.as_ref().expect("audio output was checked");
+
+        match looped_player(output, &path) {
             Ok(player) => {
                 self.player = Some(player);
                 self.active_track = Some(track);
