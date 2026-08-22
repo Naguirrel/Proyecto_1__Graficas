@@ -20,25 +20,22 @@ impl MusicTrack {
 
 #[derive(Debug, Clone, Default)]
 pub struct AudioTracks {
+    audio_dir: PathBuf,
     background: Option<PathBuf>,
     power: Option<PathBuf>,
+    mp3_count: usize,
 }
 
 impl AudioTracks {
     pub fn discover(audio_dir: impl AsRef<Path>) -> Self {
-        let Ok(entries) = fs::read_dir(audio_dir) else {
-            return Self::default();
-        };
-
-        let paths = entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| is_mp3(path))
-            .collect::<Vec<_>>();
+        let audio_dir = audio_dir.as_ref().to_path_buf();
+        let paths = collect_mp3_paths(&audio_dir);
 
         Self {
+            audio_dir,
             background: find_background_track(&paths),
             power: find_power_track(&paths),
+            mp3_count: paths.len(),
         }
     }
 
@@ -58,6 +55,25 @@ impl AudioTracks {
     fn has_power(&self) -> bool {
         self.power.is_some()
     }
+
+    fn missing_message(&self, track: MusicTrack) -> String {
+        let expected = match track {
+            MusicTrack::Background => "un MP3 cuyo nombre contenga `C fondo`",
+            MusicTrack::Power => "un MP3 cuyo nombre termine en `TS`",
+        };
+
+        if self.mp3_count == 0 {
+            format!(
+                "No se encontraron MP3 en {}. Coloca ahi {expected}.",
+                self.audio_dir.display()
+            )
+        } else {
+            format!(
+                "No se encontro {expected} dentro de {}.",
+                self.audio_dir.display()
+            )
+        }
+    }
 }
 
 pub struct AudioManager {
@@ -72,6 +88,10 @@ impl AudioManager {
     pub fn new(audio_dir: impl AsRef<Path>) -> Self {
         let tracks = AudioTracks::discover(audio_dir);
         let output = DeviceSinkBuilder::open_default_sink()
+            .map(|mut output| {
+                output.log_on_drop(false);
+                output
+            })
             .map_err(|error| eprintln!("Audio disabled: {error}"))
             .ok();
 
@@ -137,7 +157,7 @@ impl AudioManager {
         }
 
         self.missing_track_warnings[index] = true;
-        eprintln!("Audio track not found for {track:?}");
+        eprintln!("{}", self.tracks.missing_message(track));
     }
 }
 
@@ -155,7 +175,11 @@ fn looped_player(output: &MixerDeviceSink, path: &Path) -> Result<Player, String
 fn find_background_track(paths: &[PathBuf]) -> Option<PathBuf> {
     paths
         .iter()
-        .find(|path| is_mp3(path) && normalized_file_name(path).contains("c fondo"))
+        .find(|path| {
+            let name = normalized_file_name(path);
+
+            is_mp3(path) && name.contains("c") && name.contains("fondo")
+        })
         .cloned()
 }
 
@@ -167,9 +191,38 @@ fn find_power_track(paths: &[PathBuf]) -> Option<PathBuf> {
                 && path
                     .file_stem()
                     .and_then(|stem| stem.to_str())
-                    .is_some_and(|stem| stem.trim().to_lowercase().ends_with("ts"))
+                    .is_some_and(|stem| normalized_text(stem).ends_with("ts"))
         })
         .cloned()
+}
+
+fn collect_mp3_paths(audio_dir: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    collect_mp3_paths_from(audio_dir, &mut paths);
+
+    paths
+}
+
+fn collect_mp3_paths_from(path: &Path, paths: &mut Vec<PathBuf>) {
+    let Ok(metadata) = fs::metadata(path) else {
+        return;
+    };
+
+    if metadata.is_file() {
+        if is_mp3(path) {
+            paths.push(path.to_path_buf());
+        }
+        return;
+    }
+
+    let Ok(entries) = fs::read_dir(path) else {
+        return;
+    };
+
+    for entry in entries.filter_map(Result::ok) {
+        collect_mp3_paths_from(&entry.path(), paths);
+    }
 }
 
 fn is_mp3(path: &Path) -> bool {
@@ -179,11 +232,26 @@ fn is_mp3(path: &Path) -> bool {
 }
 
 fn normalized_file_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or_default()
-        .trim()
-        .to_lowercase()
+    normalized_text(
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default(),
+    )
+}
+
+fn normalized_text(text: &str) -> String {
+    text.chars()
+        .map(|character| {
+            if character.is_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[cfg(test)]
@@ -217,6 +285,23 @@ mod tests {
         ];
 
         assert_eq!(find_power_track(&paths), Some(paths[1].clone()));
+    }
+
+    #[test]
+    fn finds_audio_tracks_with_separators_and_nested_folders() {
+        let dir =
+            std::env::temp_dir().join(format!("raycasting_audio_nested_{}", std::process::id()));
+        let nested_dir = dir.join("musica");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&nested_dir).expect("nested audio dir should be created");
+        File::create(nested_dir.join("C_fondo.mp3"))
+            .expect("background test file should be created");
+        File::create(nested_dir.join("poder-TS.mp3")).expect("power test file should be created");
+
+        let tracks = AudioTracks::discover(&dir);
+
+        assert!(tracks.has_background());
+        assert!(tracks.has_power());
     }
 
     fn test_audio_dir() -> PathBuf {

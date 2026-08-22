@@ -6,6 +6,7 @@ pub fn line(framebuffer: &mut Framebuffer, x0: isize, y0: isize, x1: isize, y1: 
 
 /// Dibuja una linea Bresenham permitiendo elegir color por pixel.
 /// El shader se invoca para cada pixel rasterizado, incluso si queda fuera del framebuffer.
+#[cfg(test)]
 pub fn line_with_shader<F>(
     framebuffer: &mut Framebuffer,
     x0: isize,

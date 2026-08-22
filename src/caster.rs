@@ -4,6 +4,7 @@ use crate::maze::Maze;
 use crate::player::Player;
 
 const RAY_COLOR: u32 = 0xff0000;
+#[cfg(test)]
 const STEP_SIZE: f32 = 1.0;
 const RAY_AXIS_EPSILON: f32 = 0.000001;
 pub const NUM_RAYS_2D: usize = 60;
@@ -231,6 +232,7 @@ fn cell_at_grid_position(maze: &Maze, column: isize, row: isize) -> Option<char>
         .copied()
 }
 
+#[cfg(test)]
 fn wall_side_at_hit(hit_x: f32, hit_y: f32, block_size: usize) -> WallSide {
     if block_size == 0 || !hit_x.is_finite() || !hit_y.is_finite() {
         return WallSide::Vertical;
