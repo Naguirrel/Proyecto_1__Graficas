@@ -1,10 +1,10 @@
 use crate::maze::{Maze, is_walkable};
 use crate::player::{Player, Vec2};
 
-pub const FOOD_POWER_DURATION: f32 = 12.0;
+pub const FOOD_POWER_DURATION: f32 = 20.0;
 pub const SPRITE_PICKUP_RADIUS: f32 = 18.0;
 pub const SPRITE_EAT_RADIUS: f32 = 20.0;
-const GHOST_SPEED: f32 = 35.0;
+const GHOST_SPEED: f32 = 18.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpriteKind {
@@ -44,6 +44,12 @@ pub struct SpriteState {
     pub food_power_timer: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpriteUpdate {
+    None,
+    PlayerCaught,
+}
+
 impl SpriteState {
     pub fn for_level(level_index: usize, block_size: usize) -> Self {
         Self {
@@ -60,7 +66,13 @@ impl SpriteState {
         self.food_power_timer > 0.0
     }
 
-    pub fn update(&mut self, player: &Player, maze: &Maze, block_size: usize, delta_time: f32) {
+    pub fn update(
+        &mut self,
+        player: &Player,
+        maze: &Maze,
+        block_size: usize,
+        delta_time: f32,
+    ) -> SpriteUpdate {
         self.food_power_timer = (self.food_power_timer - delta_time).max(0.0);
 
         for sprite in &mut self.sprites {
@@ -76,9 +88,7 @@ impl SpriteState {
 
         move_ghosts_toward_player(&mut self.sprites, player, maze, block_size, delta_time);
 
-        if !self.has_food_power() {
-            return;
-        }
+        let has_food_power = self.has_food_power();
 
         for sprite in &mut self.sprites {
             if !sprite.active || sprite.kind != SpriteKind::Ghost1 {
@@ -86,9 +96,15 @@ impl SpriteState {
             }
 
             if sprite.distance_to_player(player) <= SPRITE_EAT_RADIUS {
-                sprite.active = false;
+                if has_food_power {
+                    sprite.active = false;
+                } else {
+                    return SpriteUpdate::PlayerCaught;
+                }
             }
         }
+
+        SpriteUpdate::None
     }
 }
 
@@ -210,8 +226,9 @@ mod tests {
         let mut state = SpriteState::for_level(0, 40);
         let maze = open_test_maze();
 
-        state.update(&player, &maze, 40, 0.0);
+        let update = state.update(&player, &maze, 40, 0.0);
 
+        assert_eq!(update, SpriteUpdate::None);
         assert!(state.has_food_power());
         assert!(!state.sprites[0].active);
         assert_eq!(state.food_power_timer, FOOD_POWER_DURATION);
@@ -224,8 +241,9 @@ mod tests {
         state.food_power_timer = 4.0;
         let maze = open_test_maze();
 
-        state.update(&player, &maze, 40, 1.5);
+        let update = state.update(&player, &maze, 40, 1.5);
 
+        assert_eq!(update, SpriteUpdate::None);
         assert_eq!(state.food_power_timer, 2.5);
     }
 
@@ -236,31 +254,34 @@ mod tests {
         state.food_power_timer = 4.0;
         let maze = open_test_maze();
 
-        state.update(&player, &maze, 40, 0.0);
+        let update = state.update(&player, &maze, 40, 0.0);
 
+        assert_eq!(update, SpriteUpdate::None);
         assert!(!state.sprites[3].active);
     }
 
     #[test]
-    fn unpowered_player_does_not_eat_ghost() {
+    fn unpowered_player_is_caught_by_ghost() {
         let player = Player::new(7, 5, 40);
         let mut state = SpriteState::for_level(0, 40);
         let maze = open_test_maze();
 
-        state.update(&player, &maze, 40, 0.0);
+        let update = state.update(&player, &maze, 40, 0.0);
 
+        assert_eq!(update, SpriteUpdate::PlayerCaught);
         assert!(state.sprites[3].active);
     }
 
     #[test]
     fn ghosts_move_toward_player() {
-        let player = Player::new(7, 5, 40);
+        let player = Player::new(12, 10, 40);
         let mut state = SpriteState::for_level(0, 40);
         let maze = open_test_maze();
         let before = state.sprites[4].distance_to_player(&player);
 
-        state.update(&player, &maze, 40, 1.0);
+        let update = state.update(&player, &maze, 40, 1.0);
 
+        assert_eq!(update, SpriteUpdate::None);
         let after = state.sprites[4].distance_to_player(&player);
         assert!(after < before);
     }
@@ -279,8 +300,9 @@ mod tests {
         ];
         let before_x = state.sprites[0].pos.x;
 
-        state.update(&player, &maze, 40, 1.0);
+        let update = state.update(&player, &maze, 40, 3.0);
 
+        assert_eq!(update, SpriteUpdate::None);
         assert_eq!(state.sprites[0].pos.x, before_x);
     }
 

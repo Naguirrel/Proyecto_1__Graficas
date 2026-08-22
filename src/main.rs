@@ -19,11 +19,10 @@ use maze::{Maze, find_char, load_maze, validate_maze};
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
 use render::{
-    maze_offset, render_3d_with_sprites, render_fps_overlay, render_maze, render_minimap,
-    render_pause_menu, render_player, render_sprites_2d, render_victory_screen,
-    render_welcome_screen,
+    maze_offset, render_3d_with_sprites, render_fps_overlay, render_loss_screen, render_maze,
+    render_minimap, render_pause_menu, render_player, render_victory_screen, render_welcome_screen,
 };
-use sprite::SpriteState;
+use sprite::{SpriteState, SpriteUpdate};
 use std::time::Instant;
 use texture::TextureManager;
 
@@ -366,13 +365,21 @@ fn main() -> Result<(), minifb::Error> {
                         delta_time,
                         &gamepad,
                     );
-                    sprite_state.update(&player, &current_level.maze, BLOCK_SIZE, delta_time);
+                    if sprite_state.update(&player, &current_level.maze, BLOCK_SIZE, delta_time)
+                        == SpriteUpdate::PlayerCaught
+                    {
+                        game_state = GameState::Lost;
+                        mouse_look.reset();
+                    }
 
-                    if player_reached_goal(&current_level.maze, &player, BLOCK_SIZE) {
+                    if game_state == GameState::Playing
+                        && player_reached_goal(&current_level.maze, &player, BLOCK_SIZE)
+                    {
                         game_state = GameState::Won;
                         victory_menu_index = 0;
-                    } else if window.is_key_pressed(Key::Tab, KeyRepeat::No)
-                        || gamepad.toggle_view_pressed()
+                    } else if game_state == GameState::Playing
+                        && (window.is_key_pressed(Key::Tab, KeyRepeat::No)
+                            || gamepad.toggle_view_pressed())
                     {
                         render_mode = render_mode.toggle();
                     }
@@ -519,6 +526,24 @@ fn main() -> Result<(), minifb::Error> {
 
                 mouse_look.reset();
             }
+            GameState::Lost => {
+                if window.is_key_pressed(Key::R, KeyRepeat::No)
+                    || window.is_key_pressed(Key::Enter, KeyRepeat::No)
+                    || gamepad.confirm_pressed()
+                {
+                    reset_level_state(
+                        &mut player,
+                        &mut sprite_state,
+                        selected_level_index,
+                        levels[selected_level_index].player_start,
+                        BLOCK_SIZE,
+                    );
+                    render_mode = RenderMode::Mode3D;
+                    game_state = GameState::Playing;
+                }
+
+                mouse_look.reset();
+            }
         }
 
         framebuffer.clear();
@@ -549,12 +574,6 @@ fn main() -> Result<(), minifb::Error> {
                         maze_offset_y,
                     );
                     render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
-                    render_sprites_2d(
-                        &mut framebuffer,
-                        &sprite_state.sprites,
-                        maze_offset_x,
-                        maze_offset_y,
-                    );
                 }
                 RenderMode::Mode3D => {
                     render_3d_with_sprites(
@@ -564,14 +583,9 @@ fn main() -> Result<(), minifb::Error> {
                         BLOCK_SIZE,
                         &textures,
                         &sprite_state.sprites,
+                        sprite_state.has_food_power(),
                     );
-                    render_minimap(
-                        &mut framebuffer,
-                        &current_level.maze,
-                        &player,
-                        &sprite_state.sprites,
-                        BLOCK_SIZE,
-                    );
+                    render_minimap(&mut framebuffer, &current_level.maze, &player, BLOCK_SIZE);
                 }
             },
             GameState::Paused => {
@@ -590,6 +604,14 @@ fn main() -> Result<(), minifb::Error> {
                     selected_level_index,
                     levels.len(),
                     victory_menu_index,
+                );
+            }
+            GameState::Lost => {
+                render_loss_screen(
+                    &mut framebuffer,
+                    &current_level.maze,
+                    selected_level_index,
+                    levels.len(),
                 );
             }
         }
