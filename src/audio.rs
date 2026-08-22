@@ -9,6 +9,15 @@ enum MusicTrack {
     Power,
 }
 
+impl MusicTrack {
+    fn index(self) -> usize {
+        match self {
+            Self::Background => 0,
+            Self::Power => 1,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct AudioTracks {
     background: Option<PathBuf>,
@@ -40,11 +49,13 @@ impl AudioTracks {
         }
     }
 
-    pub fn has_background(&self) -> bool {
+    #[cfg(test)]
+    fn has_background(&self) -> bool {
         self.background.is_some()
     }
 
-    pub fn has_power(&self) -> bool {
+    #[cfg(test)]
+    fn has_power(&self) -> bool {
         self.power.is_some()
     }
 }
@@ -54,6 +65,7 @@ pub struct AudioManager {
     player: Option<Player>,
     tracks: AudioTracks,
     active_track: Option<MusicTrack>,
+    missing_track_warnings: [bool; 2],
 }
 
 impl AudioManager {
@@ -68,6 +80,7 @@ impl AudioManager {
             player: None,
             tracks,
             active_track: None,
+            missing_track_warnings: [false; 2],
         }
     }
 
@@ -95,7 +108,7 @@ impl AudioManager {
             return;
         };
         let Some(path) = self.tracks.path_for(track) else {
-            eprintln!("Audio track not found for {track:?}");
+            self.warn_missing_track(track);
             return;
         };
 
@@ -108,6 +121,17 @@ impl AudioManager {
                 eprintln!("Could not play {}: {error}", path.display());
             }
         }
+    }
+
+    fn warn_missing_track(&mut self, track: MusicTrack) {
+        let index = track.index();
+
+        if self.missing_track_warnings[index] {
+            return;
+        }
+
+        self.missing_track_warnings[index] = true;
+        eprintln!("Audio track not found for {track:?}");
     }
 }
 

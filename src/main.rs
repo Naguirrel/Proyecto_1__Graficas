@@ -11,6 +11,7 @@ mod render;
 mod sprite;
 pub mod texture;
 
+use audio::AudioManager;
 use caster::cast_fov_2d;
 use framebuffer::Framebuffer;
 use game::{GameState, player_reached_goal, reset_player};
@@ -32,6 +33,7 @@ const HEIGHT: usize = 600;
 const BLOCK_SIZE: usize = 40;
 const FPS_UPDATE_INTERVAL: f32 = 0.5;
 const LEVEL_PATHS: [&str; 3] = ["maze.txt", "maze_2.txt", "maze_3.txt"];
+const AUDIO_DIR: &str = "assets/audios";
 
 struct Level {
     maze: Maze,
@@ -256,6 +258,7 @@ fn main() -> Result<(), minifb::Error> {
     let mut fps_counter = FpsCounter::new();
     let mut mouse_look = MouseLook::new();
     let mut gamepad_input = GamepadInput::new();
+    let mut audio_manager = AudioManager::new(AUDIO_DIR);
     let mut should_exit = false;
 
     while window.is_open() && !window.is_key_down(Key::Escape) && !should_exit {
@@ -545,6 +548,11 @@ fn main() -> Result<(), minifb::Error> {
 
                 mouse_look.reset();
             }
+        }
+
+        match game_state {
+            GameState::Playing => audio_manager.update_for_gameplay(sprite_state.has_food_power()),
+            _ => audio_manager.stop(),
         }
 
         framebuffer.clear();
