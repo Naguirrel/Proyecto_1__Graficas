@@ -25,6 +25,7 @@ pub struct Texture {
     pub width: usize,
     pub height: usize,
     pixels: Vec<u32>,
+    transparent: Vec<bool>,
 }
 
 #[derive(Debug)]
@@ -34,6 +35,12 @@ pub enum TextureError {
         height: usize,
     },
     PixelCountMismatch {
+        width: usize,
+        height: usize,
+        expected: usize,
+        actual: usize,
+    },
+    TransparencyCountMismatch {
         width: usize,
         height: usize,
         expected: usize,
@@ -62,6 +69,17 @@ impl fmt::Display for TextureError {
                     "texture {width}x{height} needs {expected} pixels, got {actual}"
                 )
             }
+            Self::TransparencyCountMismatch {
+                width,
+                height,
+                expected,
+                actual,
+            } => {
+                write!(
+                    formatter,
+                    "texture {width}x{height} needs {expected} alpha values, got {actual}"
+                )
+            }
             Self::Image(error) => write!(formatter, "could not decode image: {error}"),
         }
     }
@@ -78,6 +96,17 @@ impl Error for TextureError {
 
 impl Texture {
     pub fn new(width: usize, height: usize, pixels: Vec<u32>) -> Result<Self, TextureError> {
+        let transparent = vec![false; pixels.len()];
+
+        Self::new_with_transparency(width, height, pixels, transparent)
+    }
+
+    pub fn new_with_transparency(
+        width: usize,
+        height: usize,
+        pixels: Vec<u32>,
+        transparent: Vec<bool>,
+    ) -> Result<Self, TextureError> {
         if width == 0 || height == 0 {
             return Err(TextureError::InvalidDimensions { width, height });
         }
@@ -100,10 +129,20 @@ impl Texture {
             });
         }
 
+        if transparent.len() != expected {
+            return Err(TextureError::TransparencyCountMismatch {
+                width,
+                height,
+                expected,
+                actual: transparent.len(),
+            });
+        }
+
         Ok(Self {
             width,
             height,
             pixels,
+            transparent,
         })
     }
 
@@ -111,12 +150,15 @@ impl Texture {
         let image = image::open(path).map_err(TextureError::Image)?.to_rgba8();
         let width = image.width() as usize;
         let height = image.height() as usize;
-        let pixels = image
-            .pixels()
-            .map(|pixel| rgb_to_u32(pixel[0], pixel[1], pixel[2]))
-            .collect();
+        let mut pixels = Vec::with_capacity(width * height);
+        let mut transparent = Vec::with_capacity(width * height);
 
-        Self::new(width, height, pixels)
+        for pixel in image.pixels() {
+            pixels.push(rgb_to_u32(pixel[0], pixel[1], pixel[2]));
+            transparent.push(pixel[3] < 128);
+        }
+
+        Self::new_with_transparency(width, height, pixels, transparent)
     }
 
     /// Devuelve el pixel en formato 0xRRGGBB. Las coordenadas fuera de rango
@@ -130,6 +172,17 @@ impl Texture {
         let clamped_y = y.min(self.height - 1);
 
         self.pixels[clamped_y * self.width + clamped_x]
+    }
+
+    pub fn is_transparent(&self, x: usize, y: usize) -> bool {
+        if self.width == 0 || self.height == 0 {
+            return false;
+        }
+
+        let clamped_x = x.min(self.width - 1);
+        let clamped_y = y.min(self.height - 1);
+
+        self.transparent[clamped_y * self.width + clamped_x]
     }
 
     pub fn sample(&self, u: f32, v: f32) -> u32 {
@@ -177,6 +230,7 @@ impl Texture {
                 FALLBACK_BLACK,
                 FALLBACK_MAGENTA,
             ],
+            transparent: vec![false; 4],
         }
     }
 }
@@ -398,6 +452,11 @@ mod tests {
     }
 
     #[test]
+    fn rejects_wrong_transparency_count() {
+        assert!(Texture::new_with_transparency(2, 2, vec![0x000000; 4], vec![false; 3]).is_err());
+    }
+
+    #[test]
     fn gets_individual_pixels() {
         let texture = sample_texture();
 
@@ -414,6 +473,16 @@ mod tests {
         assert_eq!(texture.get_pixel(8, 0), 0x040506);
         assert_eq!(texture.get_pixel(0, 8), 0x070809);
         assert_eq!(texture.get_pixel(8, 8), 0x0a0b0c);
+    }
+
+    #[test]
+    fn tracks_transparent_pixels() {
+        let texture =
+            Texture::new_with_transparency(2, 1, vec![0x111111, 0x222222], vec![true, false])
+                .expect("transparent texture should be valid");
+
+        assert!(texture.is_transparent(0, 0));
+        assert!(!texture.is_transparent(1, 0));
     }
 
     #[test]
@@ -505,6 +574,7 @@ mod tests {
         assert!(texture.width > 0);
         assert!(texture.height > 0);
         assert_eq!(texture.pixel_count(), texture.width * texture.height);
+        assert!(texture_has_transparency(&texture));
     }
 
     #[test]
@@ -515,6 +585,7 @@ mod tests {
         assert!(texture.width > 0);
         assert!(texture.height > 0);
         assert_eq!(texture.pixel_count(), texture.width * texture.height);
+        assert!(texture_has_transparency(&texture));
     }
 
     #[test]
@@ -566,6 +637,10 @@ mod tests {
         let manager = texture_manager_with_floor_for_tests();
 
         assert_eq!(manager.floor().get_pixel(0, 0), 0x123456);
+    }
+
+    fn texture_has_transparency(texture: &Texture) -> bool {
+        (0..texture.height).any(|y| (0..texture.width).any(|x| texture.is_transparent(x, y)))
     }
 
     #[test]
