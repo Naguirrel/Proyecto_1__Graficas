@@ -1,8 +1,11 @@
+use std::f32::consts::PI;
+
 use crate::caster::cast_ray;
 use crate::framebuffer::Framebuffer;
 use crate::line::line;
 use crate::maze::Maze;
 use crate::player::Player;
+use crate::sprite::{SpriteKind, WorldSprite};
 use crate::texture::{Texture, TextureManager, texture_u_from_hit};
 
 const WALL_COLOR: u32 = 0x3b82f6;
@@ -48,6 +51,7 @@ const JUMP_VISUAL_SCALE: f32 = 1.0;
 const GLYPH_WIDTH: isize = 5;
 const GLYPH_HEIGHT: isize = 7;
 const HORIZON_EPSILON: f32 = 0.0001;
+const SPRITE_FOV_MARGIN: f32 = 0.35;
 
 pub fn render_maze(framebuffer: &mut Framebuffer, maze: &Maze, block_size: usize) {
     if maze.is_empty() || block_size == 0 {
@@ -109,6 +113,17 @@ pub fn render_3d(
     block_size: usize,
     textures: &TextureManager,
 ) {
+    render_3d_with_sprites(framebuffer, maze, player, block_size, textures, &[]);
+}
+
+pub fn render_3d_with_sprites(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    player: &Player,
+    block_size: usize,
+    textures: &TextureManager,
+    sprites: &[WorldSprite],
+) {
     if framebuffer.width == 0 || framebuffer.height == 0 {
         return;
     }
@@ -116,6 +131,7 @@ pub fn render_3d(
     let projection_plane = distance_to_projection_plane(framebuffer.width, player.fov);
     let screen_center = framebuffer.height as f32 / 2.0 + player.height * JUMP_VISUAL_SCALE;
     let last_column = framebuffer.width.saturating_sub(1);
+    let mut z_buffer = vec![f32::INFINITY; framebuffer.width];
 
     render_3d_background(
         framebuffer,
@@ -145,6 +161,7 @@ pub fn render_3d(
             false,
         );
         let corrected_distance = correct_fish_eye(intersection.distance, ray_angle, player.a);
+        z_buffer[x] = corrected_distance;
         let stake_height =
             projected_stake_height(block_size as f32, corrected_distance, projection_plane);
         let unclipped_stake_top = screen_center - stake_height / 2.0;
@@ -172,6 +189,17 @@ pub fn render_3d(
             u,
         );
     }
+
+    render_world_sprites(
+        framebuffer,
+        player,
+        block_size,
+        projection_plane,
+        screen_center,
+        textures,
+        sprites,
+        &z_buffer,
+    );
 }
 
 pub fn render_welcome_screen(
@@ -714,6 +742,169 @@ fn draw_textured_wall_column(
     }
 }
 
+fn render_world_sprites(
+    framebuffer: &mut Framebuffer,
+    player: &Player,
+    block_size: usize,
+    projection_plane: f32,
+    screen_center: f32,
+    textures: &TextureManager,
+    sprites: &[WorldSprite],
+    z_buffer: &[f32],
+) {
+    let mut projected_sprites = sprites
+        .iter()
+        .filter(|sprite| sprite.active)
+        .filter_map(|sprite| {
+            SpriteProjection::from_sprite(
+                sprite,
+                player,
+                block_size,
+                projection_plane,
+                screen_center,
+                framebuffer.width,
+                framebuffer.height,
+            )
+            .map(|projection| (sprite, projection))
+        })
+        .collect::<Vec<_>>();
+
+    projected_sprites.sort_by(|(_, left), (_, right)| {
+        right
+            .distance
+            .partial_cmp(&left.distance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    for (sprite, projection) in projected_sprites {
+        draw_sprite(
+            framebuffer,
+            textures.sprite(sprite.kind),
+            &projection,
+            z_buffer,
+        );
+    }
+}
+
+fn draw_sprite(
+    framebuffer: &mut Framebuffer,
+    texture: &Texture,
+    projection: &SpriteProjection,
+    z_buffer: &[f32],
+) {
+    for screen_x in projection.start_x..=projection.end_x {
+        let x = screen_x as usize;
+
+        if x >= framebuffer.width || projection.distance >= z_buffer[x] {
+            continue;
+        }
+
+        let texture_x = ((screen_x - projection.start_x) as usize * texture.width
+            / projection.size)
+            .min(texture.width.saturating_sub(1));
+
+        for screen_y in projection.start_y..=projection.end_y {
+            let y = screen_y as usize;
+
+            if y >= framebuffer.height {
+                continue;
+            }
+
+            let texture_y = ((screen_y - projection.start_y) as usize * texture.height
+                / projection.size)
+                .min(texture.height.saturating_sub(1));
+
+            if texture.is_transparent(texture_x, texture_y) {
+                continue;
+            }
+
+            framebuffer.buffer[y * framebuffer.width + x] = texture.get_pixel(texture_x, texture_y);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SpriteProjection {
+    start_x: isize,
+    end_x: isize,
+    start_y: isize,
+    end_y: isize,
+    size: usize,
+    distance: f32,
+}
+
+impl SpriteProjection {
+    fn from_sprite(
+        sprite: &WorldSprite,
+        player: &Player,
+        block_size: usize,
+        projection_plane: f32,
+        screen_center: f32,
+        screen_width: usize,
+        screen_height: usize,
+    ) -> Option<Self> {
+        if block_size == 0 || screen_width == 0 || screen_height == 0 {
+            return None;
+        }
+
+        let dx = sprite.pos.x - player.pos.x;
+        let dy = sprite.pos.y - player.pos.y;
+        let distance = (dx * dx + dy * dy).sqrt();
+
+        if distance <= 0.0001 {
+            return None;
+        }
+
+        let sprite_angle = dy.atan2(dx);
+        let angle_diff = normalize_angle(sprite_angle - player.a);
+
+        if angle_diff.abs() > player.fov / 2.0 + SPRITE_FOV_MARGIN {
+            return None;
+        }
+
+        let corrected_distance = distance * angle_diff.cos();
+        if corrected_distance <= 0.0001 {
+            return None;
+        }
+
+        let scale = sprite_scale(sprite.kind);
+        let size = ((block_size as f32 * projection_plane / corrected_distance) * scale)
+            .round()
+            .max(1.0) as usize;
+        let center_x = ((angle_diff + player.fov / 2.0) / player.fov) * screen_width as f32;
+        let start_x = (center_x - size as f32 / 2.0).round() as isize;
+        let start_y = (screen_center - size as f32 / 2.0).round() as isize;
+        let end_x = (start_x + size as isize - 1).min(screen_width as isize - 1);
+        let end_y = (start_y + size as isize - 1).min(screen_height as isize - 1);
+        let start_x = start_x.max(0);
+        let start_y = start_y.max(0);
+
+        if end_x < start_x || end_y < start_y {
+            return None;
+        }
+
+        Some(Self {
+            start_x,
+            end_x,
+            start_y,
+            end_y,
+            size,
+            distance: corrected_distance,
+        })
+    }
+}
+
+fn normalize_angle(angle: f32) -> f32 {
+    (angle + PI).rem_euclid(2.0 * PI) - PI
+}
+
+fn sprite_scale(kind: SpriteKind) -> f32 {
+    match kind {
+        SpriteKind::Food => 0.45,
+        SpriteKind::Ghost1 => 0.9,
+    }
+}
+
 fn clamped_texture_index(value: f32, size: usize) -> usize {
     if size == 0 || !value.is_finite() {
         return 0;
@@ -1097,6 +1288,35 @@ mod tests {
         TextureManager::new(textures.into_iter().collect(), Texture::fallback())
     }
 
+    fn texture_manager_with_sprite_color(
+        wall: char,
+        wall_color: u32,
+        sprite_kind: SpriteKind,
+        sprite_color: u32,
+    ) -> TextureManager {
+        let mut wall_textures = HashMap::new();
+        wall_textures.insert(wall, solid_texture(wall_color));
+
+        let food = if sprite_kind == SpriteKind::Food {
+            solid_texture(sprite_color)
+        } else {
+            Texture::fallback()
+        };
+        let ghost1 = if sprite_kind == SpriteKind::Ghost1 {
+            solid_texture(sprite_color)
+        } else {
+            Texture::fallback()
+        };
+
+        TextureManager::new_with_floor_and_sprites(
+            wall_textures,
+            Texture::fallback(),
+            Texture::fallback(),
+            food,
+            ghost1,
+        )
+    }
+
     fn render_test_maze() -> Maze {
         vec![
             "#####".chars().collect(),
@@ -1249,6 +1469,64 @@ mod tests {
         render_3d(&mut framebuffer, &maze, &player, 10, &textures);
 
         assert!(framebuffer_contains(&framebuffer, 0xffffff));
+    }
+
+    #[test]
+    fn sprite_projection_places_sprite_in_front_near_center() {
+        let mut player = Player::new(1, 1, 10);
+        player.a = 0.0;
+        let sprite = WorldSprite::new(SpriteKind::Food, 2, 1, 10);
+        let projection = SpriteProjection::from_sprite(
+            &sprite,
+            &player,
+            10,
+            distance_to_projection_plane(80, player.fov),
+            30.0,
+            80,
+            60,
+        )
+        .expect("sprite in front should project");
+
+        assert!(projection.start_x < 40);
+        assert!(projection.end_x > 40);
+    }
+
+    #[test]
+    fn sprite_projection_rejects_sprite_behind_player() {
+        let mut player = Player::new(1, 1, 10);
+        player.a = 0.0;
+        let sprite = WorldSprite::new(SpriteKind::Food, 0, 1, 10);
+
+        assert!(
+            SpriteProjection::from_sprite(
+                &sprite,
+                &player,
+                10,
+                distance_to_projection_plane(80, player.fov),
+                30.0,
+                80,
+                60,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn render_3d_draws_visible_sprite_in_front_of_wall() {
+        let maze = vec![
+            "#####".chars().collect(),
+            "#p  #".chars().collect(),
+            "#####".chars().collect(),
+        ];
+        let mut player = Player::new(1, 1, 10);
+        player.a = 0.0;
+        let sprite = WorldSprite::new(SpriteKind::Food, 2, 1, 10);
+        let mut framebuffer = Framebuffer::new(80, 60);
+        let textures = texture_manager_with_sprite_color('#', 0x111111, SpriteKind::Food, 0xabcdef);
+
+        render_3d_with_sprites(&mut framebuffer, &maze, &player, 10, &textures, &[sprite]);
+
+        assert!(framebuffer_contains(&framebuffer, 0xabcdef));
     }
 
     #[test]
