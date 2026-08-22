@@ -14,6 +14,8 @@ const DEFAULT_TEXTURE_PATHS: [(char, &str); 6] = [
     ('!', "assets/wall5.png"),
 ];
 const FLOOR_TEXTURE_PATH: &str = "assets/piso.png";
+const FOOD_TEXTURE_PATH: &str = "assets/comida.png";
+const GHOST_1_TEXTURE_PATH: &str = "assets/fantasma_1.png";
 
 const FALLBACK_MAGENTA: u32 = 0xff00ff;
 const FALLBACK_BLACK: u32 = 0x000000;
@@ -489,6 +491,26 @@ mod tests {
     fn loads_floor_png_from_assets() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/piso.png");
         let texture = Texture::from_file(path).expect("piso.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+    }
+
+    #[test]
+    fn loads_food_png_from_assets() {
+        let texture = Texture::from_file(FOOD_TEXTURE_PATH)
+            .expect("comida.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+    }
+
+    #[test]
+    fn loads_ghost_1_png_from_assets() {
+        let texture = Texture::from_file(GHOST_1_TEXTURE_PATH)
+            .expect("fantasma_1.png should be a valid PNG texture");
 
         assert!(texture.width > 0);
         assert!(texture.height > 0);
