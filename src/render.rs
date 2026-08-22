@@ -1,9 +1,9 @@
 use crate::caster::cast_ray;
 use crate::framebuffer::Framebuffer;
-use crate::line::{line, line_with_shader};
+use crate::line::line;
 use crate::maze::Maze;
 use crate::player::Player;
-use crate::texture::{Texture, TextureManager, texture_u_from_hit, texture_v_for_stake};
+use crate::texture::{Texture, TextureManager, texture_u_from_hit};
 
 const WALL_COLOR: u32 = 0x3b82f6;
 const WALL_PLUS_COLOR: u32 = 0xef4444;
@@ -161,17 +161,15 @@ pub fn render_3d(
             block_size,
         );
 
-        line_with_shader(
+        draw_textured_wall_column(
             framebuffer,
-            x as isize,
+            x,
             clipped_top,
-            x as isize,
             clipped_bottom,
-            |_, pixel_y| {
-                let v = texture_v_for_stake(pixel_y, unclipped_stake_top, unclipped_stake_bottom);
-
-                texture.sample(u, v)
-            },
+            unclipped_stake_top,
+            unclipped_stake_bottom,
+            texture,
+            u,
         );
     }
 }
@@ -611,66 +609,117 @@ fn render_3d_background(
 ) {
     let horizon = screen_center.clamp(0.0, framebuffer.height as f32);
     let floor_top = horizon.floor() as usize;
+    let width = framebuffer.width;
+    let height = framebuffer.height;
 
-    framebuffer.set_current_color(CEILING_COLOR);
     for y in 0..floor_top {
-        for x in 0..framebuffer.width {
-            framebuffer.point(x as isize, y as isize);
-        }
+        let row_start = y * width;
+        framebuffer.buffer[row_start..row_start + width].fill(CEILING_COLOR);
     }
 
-    for y in floor_top..framebuffer.height {
-        for x in 0..framebuffer.width {
-            let color = floor_pixel_color(
-                player,
-                block_size,
-                projection_plane,
-                screen_center,
-                x,
-                y,
-                framebuffer.width,
-                floor_texture,
-            );
+    if block_size == 0 || !projection_plane.is_finite() || !screen_center.is_finite() {
+        for y in floor_top..height {
+            let row_start = y * width;
+            framebuffer.buffer[row_start..row_start + width].fill(FLOOR_COLOR);
+        }
+        return;
+    }
 
-            framebuffer.set_current_color(color);
-            framebuffer.point(x as isize, y as isize);
+    let block_size_f = block_size as f32;
+    let left_angle = player.a - player.fov / 2.0;
+    let right_angle = player.a + player.fov / 2.0;
+    let left_correction = (left_angle - player.a).cos().abs().max(HORIZON_EPSILON);
+    let right_correction = (right_angle - player.a).cos().abs().max(HORIZON_EPSILON);
+    let left_dir_x = left_angle.cos();
+    let left_dir_y = left_angle.sin();
+    let right_dir_x = right_angle.cos();
+    let right_dir_y = right_angle.sin();
+    let texture_scale_x = floor_texture.width as f32 / block_size_f;
+    let texture_scale_y = floor_texture.height as f32 / block_size_f;
+
+    for y in floor_top..height {
+        let row_start = y * width;
+        let row_offset = y as f32 - screen_center;
+
+        if row_offset <= HORIZON_EPSILON {
+            framebuffer.buffer[row_start..row_start + width].fill(FLOOR_COLOR);
+            continue;
+        }
+
+        let base_distance = block_size_f * projection_plane / row_offset;
+        let left_distance = base_distance / left_correction;
+        let right_distance = base_distance / right_correction;
+        let world_x = player.pos.x + left_dir_x * left_distance;
+        let world_y = player.pos.y + left_dir_y * left_distance;
+        let right_world_x = player.pos.x + right_dir_x * right_distance;
+        let right_world_y = player.pos.y + right_dir_y * right_distance;
+        let step_divisor = width.saturating_sub(1).max(1) as f32;
+        let step_x = (right_world_x - world_x) / step_divisor;
+        let step_y = (right_world_y - world_y) / step_divisor;
+        let mut texture_x = world_x * texture_scale_x;
+        let mut texture_y = world_y * texture_scale_y;
+        let texture_step_x = step_x * texture_scale_x;
+        let texture_step_y = step_y * texture_scale_y;
+
+        for pixel in &mut framebuffer.buffer[row_start..row_start + width] {
+            *pixel = floor_texture.get_pixel(
+                wrapped_texture_index(texture_x, floor_texture.width),
+                wrapped_texture_index(texture_y, floor_texture.height),
+            );
+            texture_x += texture_step_x;
+            texture_y += texture_step_y;
         }
     }
 }
 
-fn floor_pixel_color(
-    player: &Player,
-    block_size: usize,
-    projection_plane: f32,
-    screen_center: f32,
-    screen_x: usize,
-    screen_y: usize,
-    screen_width: usize,
+fn wrapped_texture_index(value: f32, size: usize) -> usize {
+    if size == 0 || !value.is_finite() {
+        return 0;
+    }
+
+    (value.floor() as isize).rem_euclid(size as isize) as usize
+}
+
+fn draw_textured_wall_column(
+    framebuffer: &mut Framebuffer,
+    x: usize,
+    clipped_top: isize,
+    clipped_bottom: isize,
+    unclipped_stake_top: f32,
+    unclipped_stake_bottom: f32,
     texture: &Texture,
-) -> u32 {
-    if block_size == 0 || !projection_plane.is_finite() || !screen_center.is_finite() {
-        return FLOOR_COLOR;
+    u: f32,
+) {
+    if x >= framebuffer.width || clipped_bottom < clipped_top {
+        return;
     }
 
-    let row_offset = screen_y as f32 - screen_center;
-    if row_offset <= HORIZON_EPSILON {
-        return FLOOR_COLOR;
+    let y_start = clipped_top.max(0) as usize;
+    let y_end = clipped_bottom.min(framebuffer.height.saturating_sub(1) as isize) as usize;
+    let stake_height = unclipped_stake_bottom - unclipped_stake_top;
+
+    if !stake_height.is_finite() || stake_height <= 0.0 {
+        return;
     }
 
-    let fraction = if screen_width == 1 {
-        0.5
-    } else {
-        screen_x as f32 / screen_width.saturating_sub(1) as f32
-    };
-    let ray_angle = player.a - player.fov / 2.0 + fraction * player.fov;
-    let angle_correction = (ray_angle - player.a).cos().abs().max(HORIZON_EPSILON);
-    let distance = block_size as f32 * projection_plane / row_offset / angle_correction;
-    let world_x = player.pos.x + ray_angle.cos() * distance;
-    let world_y = player.pos.y + ray_angle.sin() * distance;
-    let u = world_x.rem_euclid(block_size as f32) / block_size as f32;
-    let v = world_y.rem_euclid(block_size as f32) / block_size as f32;
+    let texture_x = clamped_texture_index(u * texture.width as f32, texture.width);
+    let mut texture_y =
+        ((y_start as f32 - unclipped_stake_top) / stake_height) * texture.height as f32;
+    let texture_y_step = texture.height as f32 / stake_height;
 
-    texture.sample(u, v)
+    for y in y_start..=y_end {
+        framebuffer.buffer[y * framebuffer.width + x] =
+            texture.get_pixel(texture_x, clamped_texture_index(texture_y, texture.height));
+        texture_y += texture_y_step;
+    }
+}
+
+fn clamped_texture_index(value: f32, size: usize) -> usize {
+    if size == 0 || !value.is_finite() {
+        return 0;
+    }
+
+    (value.floor() as usize).min(size - 1)
 }
 
 fn distance_to_projection_plane(screen_width: usize, fov: f32) -> f32 {
@@ -1023,6 +1072,7 @@ fn glyph(character: char) -> Option<[u8; GLYPH_HEIGHT as usize]> {
 mod tests {
     use std::collections::HashMap;
     use std::f32::consts::PI;
+    use std::time::Instant;
 
     use super::*;
 
@@ -1183,7 +1233,7 @@ mod tests {
     }
 
     #[test]
-    fn render_3d_uses_filtered_texture_samples() {
+    fn render_3d_uses_direct_texture_column_samples() {
         let maze = vec![
             "###".chars().collect(),
             "#p#".chars().collect(),
@@ -1198,7 +1248,32 @@ mod tests {
 
         render_3d(&mut framebuffer, &maze, &player, 10, &textures);
 
-        assert!(framebuffer_contains(&framebuffer, 0x808080));
+        assert!(framebuffer_contains(&framebuffer, 0xffffff));
+    }
+
+    #[test]
+    #[ignore]
+    fn render_3d_full_resolution_benchmark() {
+        let maze = render_test_maze();
+        let mut player = Player::new(2, 2, 10);
+        let mut framebuffer = Framebuffer::new(800, 600);
+        let textures = TextureManager::load_default();
+        let frames = 120;
+        let start = Instant::now();
+
+        for frame in 0..frames {
+            player.a = frame as f32 * 0.01;
+            render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+        }
+
+        let elapsed = start.elapsed().as_secs_f64();
+        let fps = frames as f64 / elapsed;
+        println!(
+            "render_3d 800x600: {fps:.1} FPS ({:.2} ms/frame)",
+            1000.0 / fps
+        );
+
+        assert!(framebuffer.buffer.iter().any(|pixel| *pixel != 0));
     }
 
     #[test]
