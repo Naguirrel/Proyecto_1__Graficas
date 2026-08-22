@@ -365,7 +365,7 @@ fn main() -> Result<(), minifb::Error> {
                         delta_time,
                         &gamepad,
                     );
-                    sprite_state.update(&player, delta_time);
+                    sprite_state.update(&player, &current_level.maze, BLOCK_SIZE, delta_time);
 
                     if player_reached_goal(&current_level.maze, &player, BLOCK_SIZE) {
                         game_state = GameState::Won;
