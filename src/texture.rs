@@ -150,6 +150,17 @@ impl Texture {
         blend_color(top, bottom, y_weight)
     }
 
+    pub fn sample_repeating_nearest(&self, u: f32, v: f32) -> u32 {
+        if self.width == 0 || self.height == 0 || !u.is_finite() || !v.is_finite() {
+            return FALLBACK_MAGENTA;
+        }
+
+        let x = (u.rem_euclid(1.0) * self.width as f32).floor() as usize;
+        let y = (v.rem_euclid(1.0) * self.height as f32).floor() as usize;
+
+        self.get_pixel(x.min(self.width - 1), y.min(self.height - 1))
+    }
+
     pub fn pixel_count(&self) -> usize {
         self.pixels.len()
     }
@@ -428,6 +439,17 @@ mod tests {
         assert_eq!(texture.sample(-1.0, 0.0), 0x010203);
         assert_eq!(texture.sample(2.0, 1.0), 0x0a0b0c);
         assert_eq!(texture.sample(f32::NAN, 0.0), FALLBACK_MAGENTA);
+    }
+
+    #[test]
+    fn sample_repeating_nearest_wraps_normalized_coordinates() {
+        let texture =
+            Texture::new(2, 1, vec![0x111111, 0x222222]).expect("test texture should be valid");
+
+        assert_eq!(texture.sample_repeating_nearest(0.25, 0.0), 0x111111);
+        assert_eq!(texture.sample_repeating_nearest(0.75, 0.0), 0x222222);
+        assert_eq!(texture.sample_repeating_nearest(1.25, 0.0), 0x111111);
+        assert_eq!(texture.sample_repeating_nearest(-0.25, 0.0), 0x222222);
     }
 
     #[test]
