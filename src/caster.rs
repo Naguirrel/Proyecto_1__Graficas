@@ -67,20 +67,10 @@ pub fn cast_ray(
         0
     };
 
-    let mut side_distance_x = first_side_distance(
-        player.pos.x,
-        ray_cos,
-        map_x,
-        block_size_f,
-        step_x,
-    );
-    let mut side_distance_y = first_side_distance(
-        player.pos.y,
-        ray_sin,
-        map_y,
-        block_size_f,
-        step_y,
-    );
+    let mut side_distance_x =
+        first_side_distance(player.pos.x, ray_cos, map_x, block_size_f, step_x);
+    let mut side_distance_y =
+        first_side_distance(player.pos.y, ray_sin, map_y, block_size_f, step_y);
     let delta_distance_x = axis_delta_distance(ray_cos, block_size_f, step_x);
     let delta_distance_y = axis_delta_distance(ray_sin, block_size_f, step_y);
 
