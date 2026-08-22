@@ -43,9 +43,13 @@ const MINIMAP_PATH_COLOR: u32 = 0x1f2937;
 const MINIMAP_GOAL_COLOR: u32 = 0xfacc15;
 const MINIMAP_PLAYER_COLOR: u32 = PLAYER_COLOR;
 const MINIMAP_DIRECTION_COLOR: u32 = PLAYER_DIRECTION_COLOR;
+const MINIMAP_FOOD_COLOR: u32 = 0xffd166;
+const MINIMAP_GHOST_COLOR: u32 = 0xff4d8d;
 const MINIMAP_PLAYER_SIZE: isize = 2;
+const MINIMAP_SPRITE_SIZE: isize = 2;
 const MINIMAP_DIRECTION_LENGTH: f32 = 10.0;
 const PLAYER_SIZE: isize = 4;
+const MAP_SPRITE_SIZE: isize = 5;
 const DIRECTION_LENGTH: f32 = 30.0;
 const JUMP_VISUAL_SCALE: f32 = 1.0;
 const GLYPH_WIDTH: isize = 5;
@@ -104,6 +108,27 @@ pub fn render_player(
 
     framebuffer.set_current_color(PLAYER_DIRECTION_COLOR);
     line(framebuffer, screen_x, screen_y, screen_end_x, screen_end_y);
+}
+
+pub fn render_sprites_2d(
+    framebuffer: &mut Framebuffer,
+    sprites: &[WorldSprite],
+    offset_x: usize,
+    offset_y: usize,
+) {
+    for sprite in sprites.iter().filter(|sprite| sprite.active) {
+        let screen_x = (sprite.pos.x + offset_x as f32).round() as isize;
+        let screen_y = (sprite.pos.y + offset_y as f32).round() as isize;
+
+        fill_rect(
+            framebuffer,
+            screen_x - MAP_SPRITE_SIZE,
+            screen_y - MAP_SPRITE_SIZE,
+            MAP_SPRITE_SIZE * 2 + 1,
+            MAP_SPRITE_SIZE * 2 + 1,
+            sprite_color(sprite.kind),
+        );
+    }
 }
 
 pub fn render_3d(
@@ -451,6 +476,7 @@ pub fn render_minimap(
     framebuffer: &mut Framebuffer,
     maze: &Maze,
     player: &Player,
+    sprites: &[WorldSprite],
     block_size: usize,
 ) {
     if maze.is_empty() || block_size == 0 || framebuffer.width == 0 || framebuffer.height == 0 {
@@ -486,6 +512,7 @@ pub fn render_minimap(
         MINIMAP_BORDER_COLOR,
     );
     render_minimap_maze(framebuffer, maze, content_x, content_y);
+    render_minimap_sprites(framebuffer, sprites, block_size, content_x, content_y);
     render_minimap_player(framebuffer, player, block_size, content_x, content_y);
 }
 
@@ -569,6 +596,39 @@ fn render_minimap_player(
         direction_end_x,
         direction_end_y,
     );
+}
+
+fn render_minimap_sprites(
+    framebuffer: &mut Framebuffer,
+    sprites: &[WorldSprite],
+    block_size: usize,
+    offset_x: isize,
+    offset_y: isize,
+) {
+    if block_size == 0 {
+        return;
+    }
+
+    for sprite in sprites.iter().filter(|sprite| sprite.active) {
+        let x = offset_x + ((sprite.pos.x / block_size as f32) * MINIMAP_CELL_SIZE as f32) as isize;
+        let y = offset_y + ((sprite.pos.y / block_size as f32) * MINIMAP_CELL_SIZE as f32) as isize;
+
+        fill_rect(
+            framebuffer,
+            x - MINIMAP_SPRITE_SIZE,
+            y - MINIMAP_SPRITE_SIZE,
+            MINIMAP_SPRITE_SIZE * 2 + 1,
+            MINIMAP_SPRITE_SIZE * 2 + 1,
+            sprite_color(sprite.kind),
+        );
+    }
+}
+
+fn sprite_color(kind: SpriteKind) -> u32 {
+    match kind {
+        SpriteKind::Food => MINIMAP_FOOD_COLOR,
+        SpriteKind::Ghost1 => MINIMAP_GHOST_COLOR,
+    }
 }
 
 fn minimap_dimensions(maze: &Maze) -> (usize, usize) {
@@ -1527,6 +1587,43 @@ mod tests {
         render_3d_with_sprites(&mut framebuffer, &maze, &player, 10, &textures, &[sprite]);
 
         assert!(framebuffer_contains(&framebuffer, 0xabcdef));
+    }
+
+    #[test]
+    fn render_sprites_2d_draws_active_sprite_markers() {
+        let mut framebuffer = Framebuffer::new(80, 80);
+        let sprites = vec![WorldSprite::new(SpriteKind::Food, 1, 1, 10)];
+
+        render_sprites_2d(&mut framebuffer, &sprites, 0, 0);
+
+        assert!(framebuffer_contains(&framebuffer, MINIMAP_FOOD_COLOR));
+    }
+
+    #[test]
+    fn render_sprites_2d_skips_inactive_sprites() {
+        let mut framebuffer = Framebuffer::new(80, 80);
+        let mut sprite = WorldSprite::new(SpriteKind::Food, 1, 1, 10);
+        sprite.active = false;
+
+        render_sprites_2d(&mut framebuffer, &[sprite], 0, 0);
+
+        assert!(!framebuffer_contains(&framebuffer, MINIMAP_FOOD_COLOR));
+    }
+
+    #[test]
+    fn render_minimap_draws_sprite_markers() {
+        let maze = render_test_maze();
+        let player = Player::new(2, 2, 10);
+        let sprites = vec![
+            WorldSprite::new(SpriteKind::Food, 1, 1, 10),
+            WorldSprite::new(SpriteKind::Ghost1, 2, 1, 10),
+        ];
+        let mut framebuffer = Framebuffer::new(120, 100);
+
+        render_minimap(&mut framebuffer, &maze, &player, &sprites, 10);
+
+        assert!(framebuffer_contains(&framebuffer, MINIMAP_FOOD_COLOR));
+        assert!(framebuffer_contains(&framebuffer, MINIMAP_GHOST_COLOR));
     }
 
     #[test]

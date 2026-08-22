@@ -20,7 +20,8 @@ use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use player::Player;
 use render::{
     maze_offset, render_3d_with_sprites, render_fps_overlay, render_maze, render_minimap,
-    render_pause_menu, render_player, render_victory_screen, render_welcome_screen,
+    render_pause_menu, render_player, render_sprites_2d, render_victory_screen,
+    render_welcome_screen,
 };
 use sprite::SpriteState;
 use std::time::Instant;
@@ -548,6 +549,12 @@ fn main() -> Result<(), minifb::Error> {
                         maze_offset_y,
                     );
                     render_player(&mut framebuffer, &player, maze_offset_x, maze_offset_y);
+                    render_sprites_2d(
+                        &mut framebuffer,
+                        &sprite_state.sprites,
+                        maze_offset_x,
+                        maze_offset_y,
+                    );
                 }
                 RenderMode::Mode3D => {
                     render_3d_with_sprites(
@@ -558,7 +565,13 @@ fn main() -> Result<(), minifb::Error> {
                         &textures,
                         &sprite_state.sprites,
                     );
-                    render_minimap(&mut framebuffer, &current_level.maze, &player, BLOCK_SIZE);
+                    render_minimap(
+                        &mut framebuffer,
+                        &current_level.maze,
+                        &player,
+                        &sprite_state.sprites,
+                        BLOCK_SIZE,
+                    );
                 }
             },
             GameState::Paused => {
