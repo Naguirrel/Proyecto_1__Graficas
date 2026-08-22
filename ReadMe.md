@@ -31,6 +31,8 @@ desde archivos `.txt`, permite escoger entre tres niveles, recorrerlos en vista
 - Bresenham para rasterizacion de lineas, rayos y stakes.
 - Meta y condicion de victoria.
 - Pantalla de exito.
+- Musica de fondo en loop durante cada nivel.
+- Musica temporal de poder durante 30 segundos al recoger comida.
 
 ## Rubrica cumplida hasta el momento
 
@@ -43,7 +45,8 @@ desde archivos `.txt`, permite escoger entre tres niveles, recorrerlos en vista
 | Minimapa | 10 pts |
 | Pantalla de bienvenida con seleccion de niveles | 15 pts |
 | Pantalla de exito | 10 pts |
-| **Total cumplido hasta el momento** | **130 pts** |
+| Musica de fondo | 5 pts |
+| **Total cumplido hasta el momento** | **135 pts antes del limite de 100** |
 
 ## Ejecutar
 
@@ -117,6 +120,7 @@ cargo test
 - `src/caster.rs`: logica de raycasting para rayos 2D e impactos de paredes 3D
 - `src/render.rs`: renderizado del mapa 2D, proyeccion 3D y asignacion de
   colores
+- `src/audio.rs`: busqueda y reproduccion en loop de musica de fondo y poder
 - `src/texture.rs`: carga de imagenes PNG, almacenamiento de texturas en
   memoria y acceso individual a pixeles
 - `src/framebuffer.rs`: abstraccion del buffer de pixeles usado por el renderer
@@ -157,7 +161,10 @@ assets/
 ├── wall2.png
 ├── wall3.png
 ├── wall4.png
-└── wall5.png
+├── wall5.png
+└── audios/
+    ├── C fondo.mp3
+    └── poder TS.mp3
 ```
 
 Mapeo preparado:
@@ -170,6 +177,16 @@ Mapeo preparado:
 & -> wall5.png
 ! -> wall5.png
 ```
+
+## Audio
+
+El juego busca audios MP3 dentro de `assets/audios/`.
+
+- La musica de fondo usa el archivo cuyo nombre contiene `C fondo`.
+- La musica de poder usa el archivo cuyo nombre termina en `TS.mp3`.
+- La musica de fondo se repite mientras se juega un nivel.
+- Al recoger comida, la musica de poder reemplaza la de fondo durante los 30
+  segundos del poder. Al terminar el poder, vuelve la musica de fondo.
 
 ## Formato del Laberinto
 
