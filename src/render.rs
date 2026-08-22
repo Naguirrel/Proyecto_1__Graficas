@@ -3,7 +3,7 @@ use crate::framebuffer::Framebuffer;
 use crate::line::{line, line_with_shader};
 use crate::maze::Maze;
 use crate::player::Player;
-use crate::texture::{TextureManager, texture_x_from_hit, texture_y_for_stake};
+use crate::texture::{Texture, TextureManager, texture_u_from_hit, texture_v_for_stake};
 
 const WALL_COLOR: u32 = 0x3b82f6;
 const WALL_PLUS_COLOR: u32 = 0xef4444;
@@ -47,6 +47,7 @@ const DIRECTION_LENGTH: f32 = 30.0;
 const JUMP_VISUAL_SCALE: f32 = 1.0;
 const GLYPH_WIDTH: isize = 5;
 const GLYPH_HEIGHT: isize = 7;
+const HORIZON_EPSILON: f32 = 0.0001;
 
 pub fn render_maze(framebuffer: &mut Framebuffer, maze: &Maze, block_size: usize) {
     if maze.is_empty() || block_size == 0 {
@@ -116,7 +117,14 @@ pub fn render_3d(
     let screen_center = framebuffer.height as f32 / 2.0 + player.height * JUMP_VISUAL_SCALE;
     let last_column = framebuffer.width.saturating_sub(1);
 
-    render_3d_background(framebuffer);
+    render_3d_background(
+        framebuffer,
+        player,
+        block_size,
+        projection_plane,
+        screen_center,
+        textures.floor(),
+    );
 
     for x in 0..framebuffer.width {
         let fraction = if framebuffer.width == 1 {
@@ -146,12 +154,11 @@ pub fn render_3d(
             .min((framebuffer.height - 1) as f32)
             .round() as isize;
         let texture = textures.get(intersection.impact);
-        let tx = texture_x_from_hit(
+        let u = texture_u_from_hit(
             intersection.hit_x,
             intersection.hit_y,
             intersection.side,
             block_size,
-            texture.width,
         );
 
         line_with_shader(
@@ -161,14 +168,9 @@ pub fn render_3d(
             x as isize,
             clipped_bottom,
             |_, pixel_y| {
-                let ty = texture_y_for_stake(
-                    pixel_y,
-                    unclipped_stake_top,
-                    unclipped_stake_bottom,
-                    texture.height,
-                );
+                let v = texture_v_for_stake(pixel_y, unclipped_stake_top, unclipped_stake_bottom);
 
-                texture.get_pixel(tx, ty)
+                texture.sample(u, v)
             },
         );
     }
@@ -599,22 +601,76 @@ fn minimap_cell_color(cell: char) -> u32 {
     }
 }
 
-fn render_3d_background(framebuffer: &mut Framebuffer) {
-    let half_height = framebuffer.height / 2;
+fn render_3d_background(
+    framebuffer: &mut Framebuffer,
+    player: &Player,
+    block_size: usize,
+    projection_plane: f32,
+    screen_center: f32,
+    floor_texture: &Texture,
+) {
+    let horizon = screen_center.clamp(0.0, framebuffer.height as f32);
+    let floor_top = horizon.floor() as usize;
 
     framebuffer.set_current_color(CEILING_COLOR);
-    for y in 0..half_height {
+    for y in 0..floor_top {
         for x in 0..framebuffer.width {
             framebuffer.point(x as isize, y as isize);
         }
     }
 
-    framebuffer.set_current_color(FLOOR_COLOR);
-    for y in half_height..framebuffer.height {
+    for y in floor_top..framebuffer.height {
         for x in 0..framebuffer.width {
+            let color = floor_pixel_color(
+                player,
+                block_size,
+                projection_plane,
+                screen_center,
+                x,
+                y,
+                framebuffer.width,
+                floor_texture,
+            );
+
+            framebuffer.set_current_color(color);
             framebuffer.point(x as isize, y as isize);
         }
     }
+}
+
+fn floor_pixel_color(
+    player: &Player,
+    block_size: usize,
+    projection_plane: f32,
+    screen_center: f32,
+    screen_x: usize,
+    screen_y: usize,
+    screen_width: usize,
+    texture: &Texture,
+) -> u32 {
+    if block_size == 0 || !projection_plane.is_finite() || !screen_center.is_finite() {
+        return FLOOR_COLOR;
+    }
+
+    let row_offset = screen_y as f32 - screen_center;
+    if row_offset <= HORIZON_EPSILON {
+        return FLOOR_COLOR;
+    }
+
+    let fraction = if screen_width == 1 {
+        0.5
+    } else {
+        screen_x as f32 / screen_width.saturating_sub(1) as f32
+    };
+    let ray_angle = player.a - player.fov / 2.0 + fraction * player.fov;
+    let angle_correction = (ray_angle - player.a).cos().abs().max(HORIZON_EPSILON);
+    let distance = block_size as f32 * projection_plane / row_offset / angle_correction;
+    let world_x = player.pos.x + ray_angle.cos() * distance;
+    let world_y = player.pos.y + ray_angle.sin() * distance;
+    let u = world_x.rem_euclid(block_size as f32) / block_size as f32;
+    let v = world_y.rem_euclid(block_size as f32) / block_size as f32;
+
+    texture.sample(u, v)
 }
 
 fn distance_to_projection_plane(screen_width: usize, fov: f32) -> f32 {
@@ -968,8 +1024,6 @@ mod tests {
     use std::collections::HashMap;
     use std::f32::consts::PI;
 
-    use crate::texture::Texture;
-
     use super::*;
 
     fn solid_texture(color: u32) -> Texture {
@@ -985,6 +1039,12 @@ mod tests {
             .collect::<HashMap<_, _>>();
 
         TextureManager::new(textures, Texture::fallback())
+    }
+
+    fn texture_manager_from_textures(
+        textures: impl IntoIterator<Item = (char, Texture)>,
+    ) -> TextureManager {
+        TextureManager::new(textures.into_iter().collect(), Texture::fallback())
     }
 
     fn render_test_maze() -> Maze {
@@ -1055,6 +1115,38 @@ mod tests {
     }
 
     #[test]
+    fn render_3d_keeps_ceiling_solid() {
+        let maze = render_test_maze();
+        let mut player = Player::new(2, 2, 10);
+        player.a = 0.0;
+        let mut framebuffer = Framebuffer::new(80, 60);
+        let textures = texture_manager_for_render_tests([('#', 0x445566), ('+', 0x123456)]);
+
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+
+        assert_eq!(framebuffer.buffer[0], CEILING_COLOR);
+    }
+
+    #[test]
+    fn render_3d_draws_floor_from_floor_texture() {
+        let maze = render_test_maze();
+        let mut player = Player::new(2, 2, 10);
+        player.a = 0.0;
+        let mut framebuffer = Framebuffer::new(80, 60);
+        let mut wall_textures = HashMap::new();
+        wall_textures.insert('+', solid_texture(0x123456));
+        let textures = TextureManager::new_with_floor(
+            wall_textures,
+            Texture::fallback(),
+            solid_texture(0x445566),
+        );
+
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+
+        assert_eq!(framebuffer.buffer[framebuffer.buffer.len() - 1], 0x445566);
+    }
+
+    #[test]
     fn render_3d_selects_texture_from_wall_impact() {
         let maze = render_test_maze();
         let textures = texture_manager_for_render_tests([('#', 0x111111), ('+', 0x222222)]);
@@ -1088,6 +1180,25 @@ mod tests {
         render_3d(&mut framebuffer, &maze, &player, 10, &textures);
 
         assert!(framebuffer_contains(&framebuffer, 0x334455));
+    }
+
+    #[test]
+    fn render_3d_uses_filtered_texture_samples() {
+        let maze = vec![
+            "###".chars().collect(),
+            "#p#".chars().collect(),
+            "###".chars().collect(),
+        ];
+        let mut player = Player::new(1, 1, 10);
+        player.a = 0.0;
+        let mut framebuffer = Framebuffer::new(1, 20);
+        let gradient =
+            Texture::new(2, 1, vec![0x000000, 0xffffff]).expect("test texture should be valid");
+        let textures = texture_manager_from_textures([('#', gradient)]);
+
+        render_3d(&mut framebuffer, &maze, &player, 10, &textures);
+
+        assert!(framebuffer_contains(&framebuffer, 0x808080));
     }
 
     #[test]

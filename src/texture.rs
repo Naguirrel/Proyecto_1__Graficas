@@ -13,6 +13,7 @@ const DEFAULT_TEXTURE_PATHS: [(char, &str); 6] = [
     ('&', "assets/wall5.png"),
     ('!', "assets/wall5.png"),
 ];
+const FLOOR_TEXTURE_PATH: &str = "assets/piso.png";
 
 const FALLBACK_MAGENTA: u32 = 0xff00ff;
 const FALLBACK_BLACK: u32 = 0x000000;
@@ -129,6 +130,26 @@ impl Texture {
         self.pixels[clamped_y * self.width + clamped_x]
     }
 
+    pub fn sample(&self, u: f32, v: f32) -> u32 {
+        if self.width == 0 || self.height == 0 || !u.is_finite() || !v.is_finite() {
+            return FALLBACK_MAGENTA;
+        }
+
+        let x = u.clamp(0.0, 1.0) * self.width.saturating_sub(1) as f32;
+        let y = v.clamp(0.0, 1.0) * self.height.saturating_sub(1) as f32;
+        let x0 = x.floor() as usize;
+        let y0 = y.floor() as usize;
+        let x1 = (x0 + 1).min(self.width - 1);
+        let y1 = (y0 + 1).min(self.height - 1);
+        let x_weight = x - x0 as f32;
+        let y_weight = y - y0 as f32;
+
+        let top = blend_color(self.get_pixel(x0, y0), self.get_pixel(x1, y0), x_weight);
+        let bottom = blend_color(self.get_pixel(x0, y1), self.get_pixel(x1, y1), x_weight);
+
+        blend_color(top, bottom, y_weight)
+    }
+
     pub fn pixel_count(&self) -> usize {
         self.pixels.len()
     }
@@ -156,8 +177,19 @@ pub fn texture_x_from_hit(
     block_size: usize,
     texture_width: usize,
 ) -> usize {
-    if block_size == 0 || texture_width == 0 || !hit_x.is_finite() || !hit_y.is_finite() {
+    if texture_width == 0 {
         return 0;
+    }
+
+    let u = texture_u_from_hit(hit_x, hit_y, side, block_size);
+    let tx = (u * texture_width as f32).floor() as usize;
+
+    tx.min(texture_width - 1)
+}
+
+pub fn texture_u_from_hit(hit_x: f32, hit_y: f32, side: WallSide, block_size: usize) -> f32 {
+    if block_size == 0 || !hit_x.is_finite() || !hit_y.is_finite() {
+        return 0.0;
     }
 
     let cell_size = block_size as f32;
@@ -165,10 +197,8 @@ pub fn texture_x_from_hit(
         WallSide::Vertical => hit_y.rem_euclid(cell_size),
         WallSide::Horizontal => hit_x.rem_euclid(cell_size),
     };
-    let u = local / cell_size;
-    let tx = (u * texture_width as f32).floor() as usize;
 
-    tx.min(texture_width - 1)
+    (local / cell_size).clamp(0.0, 1.0)
 }
 
 /// Calcula la fila vertical de textura para un pixel visible de una stake.
@@ -187,21 +217,54 @@ pub fn texture_y_for_stake(
         return 0;
     }
 
-    let stake_height = unclipped_stake_bottom - unclipped_stake_top;
-    let relative_y = ((screen_y as f32 - unclipped_stake_top) / stake_height).clamp(0.0, 1.0);
-    let ty = (relative_y * texture_height as f32).floor() as usize;
+    let v = texture_v_for_stake(screen_y, unclipped_stake_top, unclipped_stake_bottom);
+    let ty = (v * texture_height as f32).floor() as usize;
 
     ty.min(texture_height - 1)
+}
+
+pub fn texture_v_for_stake(
+    screen_y: isize,
+    unclipped_stake_top: f32,
+    unclipped_stake_bottom: f32,
+) -> f32 {
+    if !unclipped_stake_top.is_finite()
+        || !unclipped_stake_bottom.is_finite()
+        || unclipped_stake_bottom <= unclipped_stake_top
+    {
+        return 0.0;
+    }
+
+    let stake_height = unclipped_stake_bottom - unclipped_stake_top;
+
+    ((screen_y as f32 - unclipped_stake_top) / stake_height).clamp(0.0, 1.0)
 }
 
 pub struct TextureManager {
     textures: HashMap<char, Texture>,
     fallback: Texture,
+    floor: Texture,
 }
 
 impl TextureManager {
     pub fn new(textures: HashMap<char, Texture>, fallback: Texture) -> Self {
-        Self { textures, fallback }
+        Self {
+            textures,
+            floor: fallback.clone(),
+            fallback,
+        }
+    }
+
+    pub fn new_with_floor(
+        textures: HashMap<char, Texture>,
+        fallback: Texture,
+        floor: Texture,
+    ) -> Self {
+        Self {
+            textures,
+            fallback,
+            floor,
+        }
     }
 
     pub fn load_default() -> Self {
@@ -214,11 +277,21 @@ impl TextureManager {
             }
         }
 
-        Self { textures, fallback }
+        let floor = Texture::from_file(FLOOR_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+
+        Self {
+            textures,
+            fallback,
+            floor,
+        }
     }
 
     pub fn get(&self, wall: char) -> &Texture {
         self.textures.get(&wall).unwrap_or(&self.fallback)
+    }
+
+    pub fn floor(&self) -> &Texture {
+        &self.floor
     }
 
     pub fn len(&self) -> usize {
@@ -233,6 +306,18 @@ impl TextureManager {
 // El framebuffer del proyecto usa 0xRRGGBB; alpha se ignora por ahora.
 fn rgb_to_u32(r: u8, g: u8, b: u8) -> u32 {
     ((r as u32) << 16) | ((g as u32) << 8) | b as u32
+}
+
+fn blend_color(left: u32, right: u32, weight: f32) -> u32 {
+    let weight = weight.clamp(0.0, 1.0);
+    let inverse = 1.0 - weight;
+    let red = (((left >> 16) & 0xff) as f32 * inverse + ((right >> 16) & 0xff) as f32 * weight)
+        .round() as u32;
+    let green = (((left >> 8) & 0xff) as f32 * inverse + ((right >> 8) & 0xff) as f32 * weight)
+        .round() as u32;
+    let blue = ((left & 0xff) as f32 * inverse + (right & 0xff) as f32 * weight).round() as u32;
+
+    (red << 16) | (green << 8) | blue
 }
 
 #[cfg(test)]
@@ -259,6 +344,14 @@ mod tests {
         textures.insert('!', Texture::new(1, 1, vec![0x666666]).unwrap());
 
         TextureManager::new(textures, Texture::fallback())
+    }
+
+    fn texture_manager_with_floor_for_tests() -> TextureManager {
+        TextureManager::new_with_floor(
+            HashMap::new(),
+            Texture::fallback(),
+            Texture::new(1, 1, vec![0x123456]).unwrap(),
+        )
     }
 
     fn raycast_test_maze() -> Maze {
@@ -311,6 +404,33 @@ mod tests {
     }
 
     #[test]
+    fn sample_returns_exact_corner_pixels() {
+        let texture = sample_texture();
+
+        assert_eq!(texture.sample(0.0, 0.0), 0x010203);
+        assert_eq!(texture.sample(1.0, 0.0), 0x040506);
+        assert_eq!(texture.sample(0.0, 1.0), 0x070809);
+        assert_eq!(texture.sample(1.0, 1.0), 0x0a0b0c);
+    }
+
+    #[test]
+    fn sample_blends_between_neighbor_pixels() {
+        let texture =
+            Texture::new(2, 1, vec![0x000000, 0xffffff]).expect("sample texture should be valid");
+
+        assert_eq!(texture.sample(0.5, 0.0), 0x808080);
+    }
+
+    #[test]
+    fn sample_clamps_normalized_coordinates() {
+        let texture = sample_texture();
+
+        assert_eq!(texture.sample(-1.0, 0.0), 0x010203);
+        assert_eq!(texture.sample(2.0, 1.0), 0x0a0b0c);
+        assert_eq!(texture.sample(f32::NAN, 0.0), FALLBACK_MAGENTA);
+    }
+
+    #[test]
     fn creates_valid_fallback_texture() {
         let texture = Texture::fallback();
 
@@ -344,11 +464,28 @@ mod tests {
     }
 
     #[test]
+    fn loads_floor_png_from_assets() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/piso.png");
+        let texture = Texture::from_file(path).expect("piso.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+    }
+
+    #[test]
     fn default_manager_maps_goal_wall_texture() {
         let manager = TextureManager::load_default();
 
         assert!(!std::ptr::eq(manager.get('!'), &manager.fallback));
         assert!(!std::ptr::eq(manager.get('&'), &manager.fallback));
+    }
+
+    #[test]
+    fn default_manager_loads_floor_texture() {
+        let manager = TextureManager::load_default();
+
+        assert!(!std::ptr::eq(manager.floor(), &manager.fallback));
     }
 
     #[test]
@@ -381,6 +518,13 @@ mod tests {
     }
 
     #[test]
+    fn texture_manager_returns_configured_floor_texture() {
+        let manager = texture_manager_with_floor_for_tests();
+
+        assert_eq!(manager.floor().get_pixel(0, 0), 0x123456);
+    }
+
+    #[test]
     fn texture_x_for_vertical_wall_uses_hit_y() {
         let tx = texture_x_from_hit(80.0, 10.0, WallSide::Vertical, 40, 32);
 
@@ -388,10 +532,24 @@ mod tests {
     }
 
     #[test]
+    fn texture_u_for_vertical_wall_uses_hit_y() {
+        let u = texture_u_from_hit(80.0, 10.0, WallSide::Vertical, 40);
+
+        assert_eq!(u, 0.25);
+    }
+
+    #[test]
     fn texture_x_for_horizontal_wall_uses_hit_x() {
         let tx = texture_x_from_hit(30.0, 80.0, WallSide::Horizontal, 40, 32);
 
         assert_eq!(tx, 24);
+    }
+
+    #[test]
+    fn texture_u_for_horizontal_wall_uses_hit_x() {
+        let u = texture_u_from_hit(30.0, 80.0, WallSide::Horizontal, 40);
+
+        assert_eq!(u, 0.75);
     }
 
     #[test]
@@ -500,6 +658,13 @@ mod tests {
         let ty = texture_y_for_stake(200, 100.0, 300.0, 32);
 
         assert_eq!(ty, 16);
+    }
+
+    #[test]
+    fn texture_v_at_unclipped_stake_center_is_half() {
+        let v = texture_v_for_stake(200, 100.0, 300.0);
+
+        assert_eq!(v, 0.5);
     }
 
     #[test]
