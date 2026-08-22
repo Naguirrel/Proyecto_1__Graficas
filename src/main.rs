@@ -7,6 +7,7 @@ mod line;
 mod maze;
 mod player;
 mod render;
+mod sprite;
 pub mod texture;
 
 use caster::cast_fov_2d;
