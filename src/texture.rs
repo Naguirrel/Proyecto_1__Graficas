@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::Path;
 
 use crate::caster::WallSide;
+use crate::sprite::SpriteKind;
 
 const DEFAULT_TEXTURE_PATHS: [(char, &str); 6] = [
     ('#', "assets/wall1.png"),
@@ -311,6 +312,8 @@ pub struct TextureManager {
     textures: HashMap<char, Texture>,
     fallback: Texture,
     floor: Texture,
+    food: Texture,
+    ghost1: Texture,
 }
 
 impl TextureManager {
@@ -318,6 +321,8 @@ impl TextureManager {
         Self {
             textures,
             floor: fallback.clone(),
+            food: fallback.clone(),
+            ghost1: fallback.clone(),
             fallback,
         }
     }
@@ -329,8 +334,26 @@ impl TextureManager {
     ) -> Self {
         Self {
             textures,
+            floor,
+            food: fallback.clone(),
+            ghost1: fallback.clone(),
+            fallback,
+        }
+    }
+
+    pub fn new_with_floor_and_sprites(
+        textures: HashMap<char, Texture>,
+        fallback: Texture,
+        floor: Texture,
+        food: Texture,
+        ghost1: Texture,
+    ) -> Self {
+        Self {
+            textures,
             fallback,
             floor,
+            food,
+            ghost1,
         }
     }
 
@@ -345,11 +368,15 @@ impl TextureManager {
         }
 
         let floor = Texture::from_file(FLOOR_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+        let food = Texture::from_file(FOOD_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+        let ghost1 = Texture::from_file(GHOST_1_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
 
         Self {
             textures,
             fallback,
             floor,
+            food,
+            ghost1,
         }
     }
 
@@ -359,6 +386,13 @@ impl TextureManager {
 
     pub fn floor(&self) -> &Texture {
         &self.floor
+    }
+
+    pub fn sprite(&self, kind: SpriteKind) -> &Texture {
+        match kind {
+            SpriteKind::Food => &self.food,
+            SpriteKind::Ghost1 => &self.ghost1,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -417,6 +451,16 @@ mod tests {
         TextureManager::new_with_floor(
             HashMap::new(),
             Texture::fallback(),
+            Texture::new(1, 1, vec![0x123456]).unwrap(),
+        )
+    }
+
+    fn texture_manager_with_sprites_for_tests() -> TextureManager {
+        TextureManager::new_with_floor_and_sprites(
+            HashMap::new(),
+            Texture::fallback(),
+            Texture::fallback(),
+            Texture::new(1, 1, vec![0xabcdef]).unwrap(),
             Texture::new(1, 1, vec![0x123456]).unwrap(),
         )
     }
@@ -604,6 +648,20 @@ mod tests {
     }
 
     #[test]
+    fn default_manager_loads_sprite_textures() {
+        let manager = TextureManager::load_default();
+
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Food),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost1),
+            &manager.fallback
+        ));
+    }
+
+    #[test]
     fn texture_manager_maps_known_wall_characters() {
         let manager = texture_manager_for_tests();
 
@@ -637,6 +695,14 @@ mod tests {
         let manager = texture_manager_with_floor_for_tests();
 
         assert_eq!(manager.floor().get_pixel(0, 0), 0x123456);
+    }
+
+    #[test]
+    fn texture_manager_returns_configured_sprite_textures() {
+        let manager = texture_manager_with_sprites_for_tests();
+
+        assert_eq!(manager.sprite(SpriteKind::Food).get_pixel(0, 0), 0xabcdef);
+        assert_eq!(manager.sprite(SpriteKind::Ghost1).get_pixel(0, 0), 0x123456);
     }
 
     fn texture_has_transparency(texture: &Texture) -> bool {
