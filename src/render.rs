@@ -918,7 +918,7 @@ fn normalize_angle(angle: f32) -> f32 {
 fn sprite_scale(kind: SpriteKind) -> f32 {
     match kind {
         SpriteKind::Food => 0.45,
-        SpriteKind::Ghost1 => 0.9,
+        SpriteKind::Ghost1 | SpriteKind::Ghost2 | SpriteKind::Ghost3 => 0.9,
     }
 }
 

@@ -10,6 +10,14 @@ const GHOST_SPEED: f32 = 18.0;
 pub enum SpriteKind {
     Food,
     Ghost1,
+    Ghost2,
+    Ghost3,
+}
+
+impl SpriteKind {
+    pub fn is_ghost(self) -> bool {
+        matches!(self, Self::Ghost1 | Self::Ghost2 | Self::Ghost3)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -91,7 +99,7 @@ impl SpriteState {
         let has_food_power = self.has_food_power();
 
         for sprite in &mut self.sprites {
-            if !sprite.active || sprite.kind != SpriteKind::Ghost1 {
+            if !sprite.active || !sprite.kind.is_ghost() {
                 continue;
             }
 
@@ -115,7 +123,27 @@ pub fn level_sprites(level_index: usize, block_size: usize) -> Vec<WorldSprite> 
             WorldSprite::new(SpriteKind::Food, 6, 3, block_size),
             WorldSprite::new(SpriteKind::Food, 11, 7, block_size),
             WorldSprite::new(SpriteKind::Ghost1, 7, 5, block_size),
-            WorldSprite::new(SpriteKind::Ghost1, 15, 10, block_size),
+            WorldSprite::new(SpriteKind::Ghost2, 15, 10, block_size),
+        ],
+        1 => vec![
+            WorldSprite::new(SpriteKind::Food, 3, 1, block_size),
+            WorldSprite::new(SpriteKind::Food, 6, 3, block_size),
+            WorldSprite::new(SpriteKind::Food, 14, 5, block_size),
+            WorldSprite::new(SpriteKind::Food, 16, 11, block_size),
+            WorldSprite::new(SpriteKind::Ghost1, 4, 5, block_size),
+            WorldSprite::new(SpriteKind::Ghost2, 15, 7, block_size),
+            WorldSprite::new(SpriteKind::Ghost3, 11, 9, block_size),
+        ],
+        2 => vec![
+            WorldSprite::new(SpriteKind::Food, 3, 1, block_size),
+            WorldSprite::new(SpriteKind::Food, 8, 1, block_size),
+            WorldSprite::new(SpriteKind::Food, 4, 3, block_size),
+            WorldSprite::new(SpriteKind::Food, 6, 7, block_size),
+            WorldSprite::new(SpriteKind::Food, 13, 7, block_size),
+            WorldSprite::new(SpriteKind::Ghost1, 4, 5, block_size),
+            WorldSprite::new(SpriteKind::Ghost2, 4, 9, block_size),
+            WorldSprite::new(SpriteKind::Ghost3, 13, 9, block_size),
+            WorldSprite::new(SpriteKind::Ghost1, 15, 11, block_size),
         ],
         _ => Vec::new(),
     }
@@ -133,7 +161,7 @@ fn move_ghosts_toward_player(
     }
 
     for sprite in sprites {
-        if !sprite.active || sprite.kind != SpriteKind::Ghost1 {
+        if !sprite.active || !sprite.kind.is_ghost() {
             continue;
         }
 
@@ -177,26 +205,53 @@ mod tests {
         let sprites = level_sprites(0, 40);
 
         assert_eq!(sprites.len(), 5);
-        assert_eq!(
-            sprites
-                .iter()
-                .filter(|sprite| sprite.kind == SpriteKind::Food)
-                .count(),
-            3
-        );
-        assert_eq!(
-            sprites
-                .iter()
-                .filter(|sprite| sprite.kind == SpriteKind::Ghost1)
-                .count(),
-            2
-        );
+        assert_sprite_counts(&sprites, 3, 2);
     }
 
     #[test]
-    fn later_levels_start_without_sprites() {
-        assert!(level_sprites(1, 40).is_empty());
-        assert!(level_sprites(2, 40).is_empty());
+    fn levels_add_one_food_and_one_ghost_each() {
+        let level_one = level_sprites(0, 40);
+        let level_two = level_sprites(1, 40);
+        let level_three = level_sprites(2, 40);
+
+        assert_sprite_counts(&level_one, 3, 2);
+        assert_sprite_counts(&level_two, 4, 3);
+        assert_sprite_counts(&level_three, 5, 4);
+    }
+
+    #[test]
+    fn unknown_levels_start_without_sprites() {
+        assert!(level_sprites(3, 40).is_empty());
+    }
+
+    #[test]
+    fn later_levels_use_all_available_ghost_textures() {
+        let level_two = level_sprites(1, 40);
+        let level_three = level_sprites(2, 40);
+
+        for kind in [SpriteKind::Ghost1, SpriteKind::Ghost2, SpriteKind::Ghost3] {
+            assert!(level_two.iter().any(|sprite| sprite.kind == kind));
+            assert!(level_three.iter().any(|sprite| sprite.kind == kind));
+        }
+    }
+
+    #[test]
+    fn level_sprites_spawn_on_walkable_cells() {
+        for level_index in 0..=2 {
+            let maze = project_level_maze(level_index);
+            let sprites = level_sprites(level_index, 40);
+
+            for sprite in sprites {
+                assert!(
+                    is_walkable(&maze, sprite.pos.x, sprite.pos.y, 40),
+                    "sprite {:?} should spawn on walkable cell at ({}, {}) in level {}",
+                    sprite.kind,
+                    sprite.pos.x,
+                    sprite.pos.y,
+                    level_index + 1
+                );
+            }
+        }
     }
 
     #[test]
@@ -322,5 +377,33 @@ mod tests {
             "#                  #".chars().collect(),
             "####################".chars().collect(),
         ]
+    }
+
+    fn assert_sprite_counts(sprites: &[WorldSprite], food_count: usize, ghost_count: usize) {
+        assert_eq!(
+            sprites
+                .iter()
+                .filter(|sprite| sprite.kind == SpriteKind::Food)
+                .count(),
+            food_count
+        );
+        assert_eq!(
+            sprites
+                .iter()
+                .filter(|sprite| sprite.kind.is_ghost())
+                .count(),
+            ghost_count
+        );
+    }
+
+    fn project_level_maze(level_index: usize) -> Maze {
+        let text = match level_index {
+            0 => include_str!("../maze.txt"),
+            1 => include_str!("../maze_2.txt"),
+            2 => include_str!("../maze_3.txt"),
+            _ => "",
+        };
+
+        text.lines().map(|line| line.chars().collect()).collect()
     }
 }

@@ -17,6 +17,8 @@ const DEFAULT_TEXTURE_PATHS: [(char, &str); 6] = [
 const FLOOR_TEXTURE_PATH: &str = "assets/piso.png";
 const FOOD_TEXTURE_PATH: &str = "assets/comida.png";
 const GHOST_1_TEXTURE_PATH: &str = "assets/fantasma_1.png";
+const GHOST_2_TEXTURE_PATH: &str = "assets/fantasma_2.png";
+const GHOST_3_TEXTURE_PATH: &str = "assets/fantasma_3.png";
 const SCARED_GHOST_TEXTURE_PATH: &str = "assets/fantasma_asustado.png";
 
 const FALLBACK_MAGENTA: u32 = 0xff00ff;
@@ -315,6 +317,8 @@ pub struct TextureManager {
     floor: Texture,
     food: Texture,
     ghost1: Texture,
+    ghost2: Texture,
+    ghost3: Texture,
     scared_ghost: Texture,
 }
 
@@ -325,6 +329,8 @@ impl TextureManager {
             floor: fallback.clone(),
             food: fallback.clone(),
             ghost1: fallback.clone(),
+            ghost2: fallback.clone(),
+            ghost3: fallback.clone(),
             scared_ghost: fallback.clone(),
             fallback,
         }
@@ -340,6 +346,8 @@ impl TextureManager {
             floor,
             food: fallback.clone(),
             ghost1: fallback.clone(),
+            ghost2: fallback.clone(),
+            ghost3: fallback.clone(),
             scared_ghost: fallback.clone(),
             fallback,
         }
@@ -371,12 +379,17 @@ impl TextureManager {
         ghost1: Texture,
         scared_ghost: Texture,
     ) -> Self {
+        let ghost2 = ghost1.clone();
+        let ghost3 = ghost1.clone();
+
         Self {
             textures,
             fallback,
             floor,
             food,
             ghost1,
+            ghost2,
+            ghost3,
             scared_ghost,
         }
     }
@@ -394,6 +407,8 @@ impl TextureManager {
         let floor = Texture::from_file(FLOOR_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
         let food = Texture::from_file(FOOD_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
         let ghost1 = Texture::from_file(GHOST_1_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+        let ghost2 = Texture::from_file(GHOST_2_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
+        let ghost3 = Texture::from_file(GHOST_3_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
         let scared_ghost =
             Texture::from_file(SCARED_GHOST_TEXTURE_PATH).unwrap_or_else(|_| fallback.clone());
 
@@ -403,6 +418,8 @@ impl TextureManager {
             floor,
             food,
             ghost1,
+            ghost2,
+            ghost3,
             scared_ghost,
         }
     }
@@ -418,8 +435,10 @@ impl TextureManager {
     pub fn sprite(&self, kind: SpriteKind, ghosts_scared: bool) -> &Texture {
         match kind {
             SpriteKind::Food => &self.food,
-            SpriteKind::Ghost1 if ghosts_scared => &self.scared_ghost,
+            kind if ghosts_scared && kind.is_ghost() => &self.scared_ghost,
             SpriteKind::Ghost1 => &self.ghost1,
+            SpriteKind::Ghost2 => &self.ghost2,
+            SpriteKind::Ghost3 => &self.ghost3,
         }
     }
 
@@ -662,6 +681,26 @@ mod tests {
     }
 
     #[test]
+    fn loads_ghost_2_png_from_assets() {
+        let texture = Texture::from_file(GHOST_2_TEXTURE_PATH)
+            .expect("fantasma_2.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+    }
+
+    #[test]
+    fn loads_ghost_3_png_from_assets() {
+        let texture = Texture::from_file(GHOST_3_TEXTURE_PATH)
+            .expect("fantasma_3.png should be a valid PNG texture");
+
+        assert!(texture.width > 0);
+        assert!(texture.height > 0);
+        assert_eq!(texture.pixel_count(), texture.width * texture.height);
+    }
+
+    #[test]
     fn loads_scared_ghost_png_from_assets() {
         let texture = Texture::from_file(SCARED_GHOST_TEXTURE_PATH)
             .expect("fantasma_asustado.png should be a valid PNG texture");
@@ -700,7 +739,23 @@ mod tests {
             &manager.fallback
         ));
         assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost2, false),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost3, false),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
             manager.sprite(SpriteKind::Ghost1, true),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost2, true),
+            &manager.fallback
+        ));
+        assert!(!std::ptr::eq(
+            manager.sprite(SpriteKind::Ghost3, true),
             &manager.fallback
         ));
     }
@@ -755,6 +810,22 @@ mod tests {
         );
         assert_eq!(
             manager.sprite(SpriteKind::Ghost1, true).get_pixel(0, 0),
+            0xfedcba
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost2, false).get_pixel(0, 0),
+            0x123456
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost3, false).get_pixel(0, 0),
+            0x123456
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost2, true).get_pixel(0, 0),
+            0xfedcba
+        );
+        assert_eq!(
+            manager.sprite(SpriteKind::Ghost3, true).get_pixel(0, 0),
             0xfedcba
         );
     }
