@@ -1,7 +1,7 @@
 use crate::maze::{Maze, is_walkable};
 use crate::player::{Player, Vec2};
 
-pub const FOOD_POWER_DURATION: f32 = 20.0;
+pub const FOOD_POWER_DURATION: f32 = 30.0;
 pub const SPRITE_PICKUP_RADIUS: f32 = 18.0;
 pub const SPRITE_EAT_RADIUS: f32 = 20.0;
 const GHOST_SPEED: f32 = 18.0;

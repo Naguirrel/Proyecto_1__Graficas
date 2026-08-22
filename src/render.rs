@@ -106,6 +106,7 @@ pub fn render_player(
     line(framebuffer, screen_x, screen_y, screen_end_x, screen_end_y);
 }
 
+#[cfg(test)]
 pub fn render_3d(
     framebuffer: &mut Framebuffer,
     maze: &Maze,
